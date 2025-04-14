@@ -1,0 +1,9 @@
+google-adk
+google-generativeai
+# Add libraries needed by the EXECUTED code (not the agent framework itself)
+# Example:
+# pandas
+# scikit-learn
+# matplotlib
+# seaborn
+# joblib
