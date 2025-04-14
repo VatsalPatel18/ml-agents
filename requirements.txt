@@ -1,9 +1,11 @@
 google-adk
 google-generativeai
+litellm # For OpenAI/Ollama support
+
 # Add libraries needed by the EXECUTED code (not the agent framework itself)
-# Example:
-# pandas
-# scikit-learn
-# matplotlib
-# seaborn
-# joblib
+# Ensure these are installed in the environment where the code execution tool runs
+pandas
+scikit-learn
+matplotlib
+seaborn
+joblib

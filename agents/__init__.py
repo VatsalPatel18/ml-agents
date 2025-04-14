@@ -1,4 +1,6 @@
 # agents/__init__.py
+
+# Import agent instances directly
 from .orchestrator import ml_orchestrator_agent
 from .code_generator import code_generator_agent
 from .image_analyzer import image_analysis_agent
@@ -8,10 +10,9 @@ from .trainer import training_agent
 from .evaluator import evaluation_agent
 from .reporter import reporting_agent
 
-# Tools derived from agents
-from .code_generator import code_generator_tool
-from .image_analyzer import image_analysis_tool
-
+# AgentTool instances (like code_generator_tool, image_analysis_tool)
+# are now created in main.py after the agents are instantiated,
+# so they are not exported directly from here anymore.
 
 __all__ = [
     "ml_orchestrator_agent",
@@ -22,7 +23,9 @@ __all__ = [
     "training_agent",
     "evaluation_agent",
     "reporting_agent",
-    "code_generator_tool",
-    "image_analysis_tool",
+    # Removed tool exports:
+    # "code_generator_tool",
+    # "image_analysis_tool",
 ]
 
+print("--- Agents Imported ---")

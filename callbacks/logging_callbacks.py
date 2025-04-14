@@ -3,9 +3,10 @@ import logging
 from typing import Optional, Dict, Any
 
 # Import ADK types for type hinting
-from google.adk.agents.callback_context import CallbackContext, InvocationContext
+from google.adk.agents.callback_context import CallbackContext # Correct context for agent callbacks
+# Removed incorrect InvocationContext import
 from google.adk.tools.base_tool import BaseTool
-from google.adk.tools.tool_context import ToolContext
+from google.adk.tools.tool_context import ToolContext # Correct context for tool callbacks
 from google.adk.events import Event
 
 # Get the loggers configured in config.py
@@ -64,65 +65,49 @@ async def log_after_tool(tool: BaseTool, args: Dict[str, Any], tool_context: Too
 
     if isinstance(result, dict):
         status = result.get("status", "Success") # Check for status key convention
-        # Summarize result for logging, avoid huge outputs
         log_result_summary = {k: (v[:200] + '...' if isinstance(v, str) and len(v) > 200 else v) for k, v in result.items()}
-        # Don't log output_files content, just keys/paths if needed
         if 'output_files' in log_result_summary:
              log_result_summary['output_files'] = list(log_result_summary['output_files'].keys()) # Log only names
-
     elif isinstance(result, Exception):
         status = f"Tool Error: {type(result).__name__}"
         log_result_summary = str(result)
     elif result is None:
-         status = "Completed (No explicit return)" # e.g. some callbacks might return None
+         status = "Completed (No explicit return)"
          log_result_summary = "None"
     else:
-        # Handle other types if necessary
         status = "Completed"
         log_result_summary = str(result)[:200] + ('...' if len(str(result)) > 200 else '')
-
 
     tool_calls_logger.info(f"INVOKE_ID={invocation_id}: Agent '{agent_name}' <- Tool '{tool_name}' (CallID: {func_call_id}) Finished. Status: {status}")
     tool_calls_logger.debug(f"INVOKE_ID={invocation_id}: Tool '{tool_name}' Result Summary: {log_result_summary}")
 
-    # --- Example: Artifact Saving Logic in Callback ---
-    # If the tool was code_execution and state indicates a plot was expected, save it.
-    # This requires careful state management by the calling agent.
+    # Artifact saving logic (remains the same, relies on agent setting state)
     if tool_name == "code_execution_tool" and status == "success":
-        plot_info = tool_context.state.get("temp:expected_plot_output") # Agent sets this before calling code exec
+        plot_info = tool_context.state.get("temp:expected_plot_output")
         if plot_info and isinstance(plot_info, dict) and isinstance(result, dict):
             output_files = result.get("output_files", {})
-            plot_logical_name = plot_info.get("logical_name") # e.g., 'confusion_matrix_lr_d1'
-            plot_output_key = plot_info.get("output_key", "plot") # Key in output_files dict
+            plot_logical_name = plot_info.get("logical_name")
+            plot_output_key = plot_info.get("output_key", "plot")
 
             if plot_logical_name and plot_output_key in output_files:
                 plot_local_path = output_files[plot_output_key]
                 tool_calls_logger.info(f"INVOKE_ID={invocation_id}: Found expected plot output '{plot_output_key}' at '{plot_local_path}'. Attempting artifact save.")
-
-                # Import helper within async function if needed, or ensure it's globally available
-                from .artifact_helpers import save_plot_artifact
-
-                artifact_name = await save_plot_artifact(plot_local_path, plot_logical_name, tool_context)
-
-                if artifact_name:
-                    # Store the artifact name back in state, perhaps under the model/dataset ID
-                    state_key_base = plot_info.get("state_key_base") # e.g., "models.LR_d1_run1"
-                    if state_key_base:
-                         # Need a way to safely update nested state dicts
-                         # This is complex to do reliably here. The agent might be better suited
-                         # to update its own state after receiving the tool result.
-                         # For now, just log it.
-                         tool_calls_logger.info(f"INVOKE_ID={invocation_id}: Plot artifact '{artifact_name}' saved. Agent should update state key like '{state_key_base}.plots'.")
-                         # Example of how agent might update state later:
-                         # current_plots = tool_context.state.get(f'{state_key_base}.plots', [])
-                         # current_plots.append(artifact_name)
-                         # tool_context.state[f'{state_key_base}.plots'] = current_plots
-                    else:
-                         tool_calls_logger.warning(f"INVOKE_ID={invocation_id}: Plot artifact saved ('{artifact_name}'), but no state_key_base provided in temp:expected_plot_output to link it.")
-
-                # Clear the temporary flag
-                tool_context.state["temp:expected_plot_output"] = None
-
+                try:
+                    # Ensure helper is imported correctly if needed here
+                    from core_tools.artifact_helpers import save_plot_artifact
+                    artifact_name = await save_plot_artifact(plot_local_path, plot_logical_name, tool_context)
+                    if artifact_name:
+                        state_key_base = plot_info.get("state_key_base")
+                        if state_key_base:
+                            tool_calls_logger.info(f"INVOKE_ID={invocation_id}: Plot artifact '{artifact_name}' saved. Agent should update state key like '{state_key_base}.plots'.")
+                        else:
+                            tool_calls_logger.warning(f"INVOKE_ID={invocation_id}: Plot artifact saved ('{artifact_name}'), but no state_key_base provided.")
+                    # Clear the temporary flag
+                    if "temp:expected_plot_output" in tool_context.state:
+                         tool_context.state.pop("temp:expected_plot_output") # Use pop for safety
+                except ImportError:
+                     tool_calls_logger.error(f"INVOKE_ID={invocation_id}: Could not import artifact_helpers in callback.")
+                except Exception as e:
+                     tool_calls_logger.error(f"INVOKE_ID={invocation_id}: Error saving artifact in callback: {e}")
 
     return None # Callback should not modify the tool result itself here
-

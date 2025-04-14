@@ -2,41 +2,50 @@
 import logging
 import json
 import os
+import time
 import base64 # Needed if passing image bytes via state for analysis
 from typing import Optional, Dict, Any, AsyncGenerator, List
 
 from google.adk.agents import LlmAgent
-from google.adk.agents.callback_context import InvocationContext
+from google.adk.agents.invocation_context import InvocationContext # Corrected path
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types # For Part creation
 
 from config import (
     TASK_AGENT_MODEL,
+    USE_LITELLM, # Check if LiteLLM should be used
     WORKSPACE_DIR,
     ARTIFACT_PREFIX,
     agent_flow_logger,
     tool_calls_logger,
 )
+
+# Import LiteLLM wrapper if needed
+if USE_LITELLM:
+    try:
+        from google.adk.models.lite_llm import LiteLlm
+        print("LiteLLM imported successfully for Preprocessor.")
+    except ImportError:
+        print("ERROR: LiteLLM specified in config, but 'litellm' package not found. pip install litellm")
+        LiteLlm = None
+else:
+    LiteLlm = None # Define as None if not used
+
+
 # Import tools and helpers - assuming they are accessible
 # In a real package structure, use relative imports:
-# from ..core_tools import code_execution_tool, logging_tool, save_plot_artifact
+# from ..core_tools import code_execution_tool, logging_tool, save_plot_artifact, human_approval_tool
 # from .code_generator import code_generator_tool # AgentTool
 # from .image_analyzer import image_analysis_tool # AgentTool
 
 class PreprocessingAgent(LlmAgent):
     def __init__(self, **kwargs):
-        # Ensure necessary tools are passed in kwargs or globally available
-        required_tools = [
-            "code_execution_tool",
-            "logging_tool",
-            "CodeGeneratorAgent", # AgentTool name
-            "ImageAnalysisAgent", # AgentTool name (optional but planned)
-            # save_plot_artifact is a helper function, not a tool itself
-        ]
-        # You might want to assert that tools are present in kwargs['tools']
+        # Determine model configuration
+        model_config = LiteLlm(model=TASK_AGENT_MODEL) if USE_LITELLM and LiteLlm else TASK_AGENT_MODEL
+
         super().__init__(
             name="PreprocessingAgent",
-            model=TASK_AGENT_MODEL,
+            model=model_config, # Use configured model
             instruction="""
 Your task is to manage the preprocessing of a loaded dataset based on a defined strategy.
 1. You will receive the dataset identifier (e.g., 'd1') via state (`current_dataset_id`).
@@ -49,12 +58,13 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
 8. If successful, parse 'output_files' for the 'processed_data' path. Parse stdout for applied 'INFO' steps.
 9. Update the state for the dataset ID: set 'processed_data_path', update 'preprocess_steps' list, set 'preprocess_status' to 'success'. Use EventActions state_delta.
 10. Check state if visualization is requested (`visualize_after_preprocess`). If yes:
-    a. Formulate prompt for 'CodeGeneratorAgent' for plotting code (e.g., feature distributions, correlation matrix using matplotlib/seaborn), saving plot to a file (e.g., 'preprocess_plot_d1.png' in WORKSPACE_DIR). Code MUST print 'SAVED_OUTPUT: plot=/path/to/plot.png'.
-    b. Call 'CodeGeneratorAgent'.
-    c. Call 'code_execution_tool' with plotting code.
-    d. If successful, get plot path from 'output_files'. Use the `save_plot_artifact` helper function (requires importing it) to read the local plot file and save it as an ADK artifact.
-    e. Update state: add the returned artifact name to `state['datasets'][dataset_id]['plots']`.
-    f. If image analysis is requested (`analyze_plots` flag in state): Call 'ImageAnalysisAgent' tool (passing artifact name and question via state). Store analysis result in state.
+    a. (Optional HITL): Consider calling `human_approval_tool` to ask user if they want to generate plots now.
+    b. Formulate prompt for 'CodeGeneratorAgent' for plotting code (e.g., feature distributions, correlation matrix using matplotlib/seaborn), saving plot to a file (e.g., 'preprocess_plot_d1.png' in WORKSPACE_DIR). Code MUST print 'SAVED_OUTPUT: plot=/path/to/plot.png'.
+    c. Call 'CodeGeneratorAgent'.
+    d. Call 'code_execution_tool' with plotting code.
+    e. If successful, get plot path from 'output_files'. Use the `save_plot_artifact` helper function (requires importing it) to read the local plot file and save it as an ADK artifact.
+    f. Update state: add the returned artifact name to `state['datasets'][dataset_id]['plots']`.
+    g. If image analysis is requested (`analyze_plots` flag in state): Call 'ImageAnalysisAgent' tool (passing artifact name and question via state). Store analysis result in state.
 11. Use 'logging_tool' to log progress and status (key 'preprocessor_log').
 12. Yield a final event indicating success/failure for this stage, including the state_delta.
 """,
@@ -66,13 +76,15 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
         self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None # Get the underlying function
         self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
         self.image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
+        self.human_approval_tool_func = self.tools_map.get("human_approval_tool").func if self.tools_map.get("human_approval_tool") else None
+
         # Import helper here or ensure it's globally available
         try:
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
         except ImportError:
-             agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
-             self.save_plot_artifact_helper = None
+            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
+            self.save_plot_artifact_helper = None
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
@@ -91,8 +103,8 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
         dataset_info = datasets_state.get(dataset_id, {})
         input_data_path = dataset_info.get("raw_data_path") # Path from DataLoadingAgent
         preprocess_strategy = dataset_info.get("preprocess_strategy", {}) # e.g., {'imputation': 'mean', 'scaling': 'standard'}
-        visualize_flag = dataset_info.get("visualize_after_preprocess", False)
-        analyze_plots_flag = dataset_info.get("analyze_plots", False)
+        visualize_flag = dataset_info.get("visualize_after_preprocess", False) # Check if Orchestrator set this based on user req
+        analyze_plots_flag = dataset_info.get("analyze_plots", False) # Check if Orchestrator set this
 
         await self._log(f"Starting preprocessing for dataset ID: {dataset_id}, Path: {input_data_path}", ctx)
 
@@ -103,10 +115,10 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
             return
 
         if not preprocess_strategy:
-             error_message = f"Preprocessing strategy not found in state for dataset ID '{dataset_id}'."
-             await self._log(error_message, ctx, level="ERROR")
-             yield self._create_final_event(ctx, final_status, error_message)
-             return
+            error_message = f"Preprocessing strategy not found in state for dataset ID '{dataset_id}'."
+            await self._log(error_message, ctx, level="ERROR")
+            yield self._create_final_event(ctx, final_status, error_message)
+            return
 
         # 3. Formulate prompt for Code Generator
         output_filename = f"processed_data_{dataset_id}.csv"
@@ -138,17 +150,17 @@ Code:
                     if event.is_final_response() and event.content and event.content.parts:
                         generated_code = event.content.parts[0].text
                         if generated_code:
-                             generated_code = generated_code.strip().strip('`').strip()
-                             if generated_code.startswith('python'):
-                                  generated_code = generated_code[len('python'):].strip()
-                             await self._log(f"Received preprocessing code.", ctx)
+                            generated_code = generated_code.strip().strip('`').strip()
+                            if generated_code.startswith('python'):
+                                generated_code = generated_code[len('python'):].strip()
+                            await self._log(f"Received preprocessing code.", ctx)
                         else:
-                             error_message = "CodeGeneratorAgent returned empty code."
-                             await self._log(error_message, ctx, level="ERROR")
+                            error_message = "CodeGeneratorAgent returned empty code."
+                            await self._log(error_message, ctx, level="ERROR")
                         break # Assume single response
                 if not generated_code and not error_message: # Handle case where agent finishes without response
-                     error_message = "CodeGeneratorAgent finished without returning code."
-                     await self._log(error_message, ctx, level="ERROR")
+                    error_message = "CodeGeneratorAgent finished without returning code."
+                    await self._log(error_message, ctx, level="ERROR")
 
             except Exception as e:
                 error_message = f"Error calling CodeGeneratorAgent: {e}"
@@ -163,8 +175,8 @@ Code:
         while attempt <= max_retries and generated_code and not processed_data_path and not error_message:
             attempt += 1
             if attempt > 1:
-                 await self._log(f"Retrying code execution (Attempt {attempt}/{max_retries})...", ctx)
-                 # TODO: Optionally re-prompt code generator with error context here
+                await self._log(f"Retrying code execution (Attempt {attempt}/{max_retries})...", ctx)
+                # TODO: Optionally re-prompt code generator with error context here
 
             if self.code_execution_tool:
                 try:
@@ -209,14 +221,29 @@ Code:
             state_updates = {
                 f"datasets.{dataset_id}.processed_data_path": processed_data_path,
                 f"datasets.{dataset_id}.preprocess_steps": applied_steps,
-                f"datasets.{dataset_id}.preprocess_status": "success"
+                f"datasets.{dataset_id}.preprocess_status": "success",
+                f"datasets.{dataset_id}.error": None # Clear previous errors
             }
             # Merge updates into the main delta
             state_delta.update(state_updates)
 
             # 10. Handle Visualization if requested
             if visualize_flag:
-                await self._handle_visualization(ctx, dataset_id, processed_data_path, analyze_plots_flag, state_delta)
+                 # --- Optional HITL before visualization ---
+                 proceed_with_viz = True
+                 if self.human_approval_tool_func:
+                     try:
+                         hitl_prompt = f"Preprocessing successful. Generate visualization plots for dataset '{dataset_id}'? (yes/no)"
+                         hitl_result = await self.human_approval_tool_func(prompt=hitl_prompt, options=["yes", "no"], tool_context=ctx)
+                         if hitl_result.get("status") != "success" or hitl_result.get("response", "").lower() != "yes":
+                             proceed_with_viz = False
+                             await self._log("User opted out of visualization.", ctx, level="INFO")
+                     except Exception as e:
+                          await self._log(f"Error during visualization HITL check: {e}", ctx, level="WARNING")
+                          # Default to proceeding if HITL fails
+
+                 if proceed_with_viz:
+                     await self._handle_visualization(ctx, dataset_id, processed_data_path, analyze_plots_flag, state_delta)
 
         else: # Preprocessing failed after retries
             final_status = "Failure"
@@ -258,19 +285,19 @@ Code:
         if self.code_generator_tool:
             try:
                 async for event in self.code_generator_tool.run_async(ctx, user_content=genai_types.Content(parts=[genai_types.Part(text=plot_gen_prompt)])):
-                     if event.is_final_response() and event.content and event.content.parts:
-                         vis_code = event.content.parts[0].text
-                         if vis_code:
-                             vis_code = vis_code.strip().strip('`').strip()
-                             if vis_code.startswith('python'):
-                                 vis_code = vis_code[len('python'):].strip()
-                             await self._log("Received visualization code.", ctx)
-                         break
+                    if event.is_final_response() and event.content and event.content.parts:
+                        vis_code = event.content.parts[0].text
+                        if vis_code:
+                            vis_code = vis_code.strip().strip('`').strip()
+                            if vis_code.startswith('python'):
+                                vis_code = vis_code[len('python'):].strip()
+                            await self._log("Received visualization code.", ctx)
+                        break
                 if not vis_code: await self._log("CodeGeneratorAgent returned empty code for visualization.", ctx, level="WARNING")
             except Exception as e:
                 await self._log(f"Error calling CodeGeneratorAgent for visualization: {e}", ctx, level="ERROR")
         else:
-             await self._log("CodeGeneratorAgent tool not configured.", ctx, level="ERROR")
+            await self._log("CodeGeneratorAgent tool not configured.", ctx, level="ERROR")
 
         # c. Call Code Execution Tool
         plot_local_path = None
@@ -281,12 +308,12 @@ Code:
                 if vis_exec_result.get("status") == "success":
                     plot_local_path = vis_exec_result.get("output_files", {}).get("plot") # Matches SAVED_OUTPUT key
                     if not plot_local_path or not os.path.exists(plot_local_path):
-                         await self._log("Visualization code ran but did not report/save plot file correctly.", ctx, level="WARNING")
-                         plot_local_path = None
+                        await self._log("Visualization code ran but did not report/save plot file correctly.", ctx, level="WARNING")
+                        plot_local_path = None
                 else:
-                     await self._log(f"Visualization code execution failed. Stderr: {vis_exec_result.get('stderr')}", ctx, level="ERROR")
+                    await self._log(f"Visualization code execution failed. Stderr: {vis_exec_result.get('stderr')}", ctx, level="ERROR")
             except Exception as e:
-                 await self._log(f"Error calling code_execution_tool for visualization: {e}", ctx, level="ERROR")
+                await self._log(f"Error calling code_execution_tool for visualization: {e}", ctx, level="ERROR")
 
         # d & e. Save plot artifact using helper
         if plot_local_path and self.save_plot_artifact_helper:
@@ -294,24 +321,23 @@ Code:
             # Call the async helper function
             artifact_name = await self.save_plot_artifact_helper(plot_local_path, logical_plot_name, ctx)
 
-            # f. Update state with artifact name
+            # f. Update state with artifact name (directly modifying the passed delta)
             if artifact_name:
                 plot_list_key = f"datasets.{dataset_id}.plots"
-                current_plots = ctx.session.state.get(plot_list_key, [])
+                # Get current plots list *from the state* (not delta) and append
+                current_plots = ctx.session.state.get("datasets", {}).get(dataset_id, {}).get("plots", [])
                 if isinstance(current_plots, list): # Ensure it's a list
-                     current_plots.append(artifact_name)
-                     state_delta[plot_list_key] = current_plots # Add to the delta being built
-                     await self._log(f"Added plot artifact '{artifact_name}' to state.", ctx)
+                    new_plots_list = current_plots + [artifact_name]
+                    state_delta[plot_list_key] = new_plots_list # Add updated list to delta
+                    await self._log(f"Added plot artifact '{artifact_name}' to state delta.", ctx)
                 else:
-                     await self._log(f"State key '{plot_list_key}' is not a list. Cannot append plot artifact.", ctx, level="WARNING")
-
+                    await self._log(f"State key '{plot_list_key}' is not a list. Cannot append plot artifact.", ctx, level="WARNING")
 
                 # g. Handle Image Analysis if requested
                 if analyze_flag and self.image_analysis_tool:
                     await self._analyze_plot(ctx, dataset_id, artifact_name, "preprocessing plot", state_delta)
-
             else:
-                 await self._log(f"Failed to save plot artifact for {plot_local_path}", ctx, level="ERROR")
+                await self._log(f"Failed to save plot artifact for {plot_local_path}", ctx, level="ERROR")
 
 
     async def _analyze_plot(self, ctx: InvocationContext, dataset_id: str, artifact_name: str, plot_context_desc: str, state_delta: Dict):
@@ -319,69 +345,70 @@ Code:
         await self._log(f"Handling analysis request for plot artifact: {artifact_name}", ctx)
 
         # Load artifact bytes (needed for simulated analysis)
-        # In a real scenario with ADK multimodal support, loading might not be needed here.
         artifact_part = None
-        if ctx.artifact_service: # Check if service is configured
-             try:
-                 # load_artifact might become async in future ADK versions
-                 artifact_part = ctx.load_artifact(artifact_name) # Synchronous for now
-             except Exception as e:
-                 await self._log(f"Failed to load artifact {artifact_name} for analysis: {e}", ctx, level="ERROR")
-                 return
+        if ctx.artifact_service:
+            try:
+                # Assuming synchronous load_artifact for now based on current ADK API
+                artifact_part = ctx.load_artifact(artifact_name)
+            except Exception as e:
+                await self._log(f"Failed to load artifact {artifact_name} for analysis: {e}", ctx, level="ERROR")
+                return
         else:
-             await self._log("ArtifactService not available, cannot load image for analysis.", ctx, level="ERROR")
-             return
+            await self._log("ArtifactService not available, cannot load image for analysis.", ctx, level="ERROR")
+            return
 
         if artifact_part and artifact_part.inline_data and artifact_part.inline_data.data:
             image_bytes = artifact_part.inline_data.data
             question = f"Analyze this {plot_context_desc} for dataset {dataset_id}. What are the key insights regarding data quality or feature relationships?"
 
-            # Set state for the ImageAnalysisAgent tool call (simulation)
-            state_delta[f"temp:image_analysis_bytes_b64"] = base64.b64encode(image_bytes).decode('utf-8')
-            state_delta[f"temp:image_analysis_question"] = question
-            # Need to yield an event with this delta BEFORE calling the tool if state is the only comms mechanism
-            # Or, modify the AgentTool call mechanism if possible (not standard ADK)
-            # For simplicity here, we'll assume the AgentTool can access the context directly (which isn't strictly true for state)
-            # A better approach might be a dedicated FunctionTool wrapper for image analysis.
-            # Let's proceed with the AgentTool call, acknowledging this limitation in simulation.
-            await self._log(f"Calling ImageAnalysisAgent for artifact {artifact_name}", ctx)
+            # --- Call ImageAnalysisAgent Tool ---
+            # The override in image_analyzer.py tries to read from state as a workaround.
+            # We set the state temporarily. This is a simulation limitation.
+            temp_state_updates = {
+                f"temp:image_analysis_bytes_b64": base64.b64encode(image_bytes).decode('utf-8'),
+                f"temp:image_analysis_question": question
+            }
+            ctx.session.state.update(temp_state_updates) # Update state directly before call
 
-            analysis_result_text = f"Placeholder: Analysis for {artifact_name} requested." # Default
+            await self._log(f"Calling ImageAnalysisAgent for artifact {artifact_name}", ctx)
+            analysis_result_text = f"Placeholder: Analysis for {artifact_name} failed." # Default
+            analysis_success = False
             if self.image_analysis_tool:
                 try:
-                    # This call is tricky because the agent needs the image bytes.
-                    # Standard AgentTool call only passes text prompt.
-                    # The override in image_analyzer.py tries to read from state as a workaround.
-                    # We need to ensure the state_delta is applied before the tool runs.
-                    # This might require yielding an intermediate event.
-                    # YIELDING INTERMEDIATE EVENT FOR STATE UPDATE:
-                    yield Event(
-                        author=self.name,
-                        invocation_id=ctx.invocation_id,
-                        actions=EventActions(state_delta=state_delta.copy()), # Send current delta
-                        content=genai_types.Content(parts=[genai_types.Part(text=f"Preparing image analysis for {artifact_name}...")])
-                    )
-                    # Clear the delta we just sent, as the runner handles it
-                    state_delta.pop("temp:image_analysis_bytes_b64", None)
-                    state_delta.pop("temp:image_analysis_question", None)
-
-                    # Now call the tool - its override will read the state set by the event above
                     async for event in self.image_analysis_tool.run_async(ctx, user_content=genai_types.Content(parts=[genai_types.Part(text=question)])): # Pass question for context
-                         if event.is_final_response() and event.content and event.content.parts:
-                             analysis_result_text = event.content.parts[0].text
-                             break
+                        if event.is_final_response():
+                            if event.content and event.content.parts:
+                                analysis_result_text = event.content.parts[0].text
+                                analysis_success = True
+                            else:
+                                analysis_result_text = f"ImageAnalysisAgent returned no content for {artifact_name}."
+                                if event.error_message:
+                                     analysis_result_text += f" Error: {event.error_message}"
+                            break
                     await self._log(f"Received analysis result for {artifact_name}", ctx)
-                    # Store analysis result in state (add to the main delta)
-                    analysis_key = f"datasets.{dataset_id}.analysis.{artifact_name.split('.')[0]}" # Use artifact name part as key
-                    state_delta[analysis_key] = analysis_result_text
 
                 except Exception as e:
                     error_message = f"Error calling ImageAnalysisAgent tool: {e}"
                     await self._log(error_message, ctx, level="ERROR")
+                    analysis_result_text = f"Error during analysis: {e}"
             else:
-                 await self._log("ImageAnalysisAgent tool not configured.", ctx, level="ERROR")
+                await self._log("ImageAnalysisAgent tool not configured.", ctx, level="ERROR")
+                analysis_result_text = "Analysis skipped: Tool not configured."
+
+            # Clean up temporary state
+            ctx.session.state.pop("temp:image_analysis_bytes_b64", None)
+            ctx.session.state.pop("temp:image_analysis_question", None)
+
+            # Store analysis result in state delta
+            if analysis_success:
+                analysis_key = f"datasets.{dataset_id}.analysis.{artifact_name.split('.')[0]}" # Use artifact name part as key
+                state_delta[analysis_key] = analysis_result_text # Add to the main delta
+                await self._log(f"Stored analysis result for {artifact_name} in state delta.", ctx)
+            else:
+                 await self._log(f"Analysis failed for {artifact_name}. Result: {analysis_result_text}", ctx, level="WARNING")
+
         else:
-             await self._log(f"Could not get image bytes for artifact {artifact_name} to perform analysis.", ctx, level="WARNING")
+            await self._log(f"Could not get image bytes for artifact {artifact_name} to perform analysis.", ctx, level="WARNING")
 
 
     # Use helper methods defined in DataLoadingAgent (or move to a base class)
@@ -398,17 +425,20 @@ Code:
             print(f"LOG ({self.name}): {message}")
 
     def _create_final_event(self, ctx: InvocationContext, status: str, error_msg: Optional[str] = None, state_delta: Optional[Dict] = None) -> Event:
-         """Creates the final event."""
-         message = f"{self.name} finished with status: {status}."
-         if error_msg and status != "Success":
-             message += f" Error: {error_msg}"
+        """Creates the final event."""
+        message = f"{self.name} finished with status: {status}."
+        if error_msg and status != "Success":
+            message += f" Error: {error_msg}"
 
-         return Event(
-             author=self.name,
-             invocation_id=ctx.invocation_id,
-             content=genai_types.Content(parts=[genai_types.Part(text=message)]),
-             actions=EventActions(state_delta=state_delta) if state_delta else None,
-             turn_complete=True,
-             error_message=error_msg if status != "Success" else None
-         )
+        return Event(
+            author=self.name,
+            invocation_id=ctx.invocation_id,
+            content=genai_types.Content(parts=[genai_types.Part(text=message)]),
+            actions=EventActions(state_delta=state_delta) if state_delta else None,
+            turn_complete=True,
+            error_message=error_msg if status != "Success" else None
+        )
 
+# Instantiate the agent (tools will be added in main.py)
+preprocessing_agent = PreprocessingAgent(tools=[])
+print(f"--- PreprocessingAgent Instantiated (Model: {preprocessing_agent.model}) ---")
