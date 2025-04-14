@@ -7,28 +7,44 @@ import base64
 import time
 from typing import Optional, Dict, Any, AsyncGenerator, List
 
-from google.adk.agents import LlmAgent # Could also use LoopAgent for structured hyperparameter tuning
+from google.adk.agents import LlmAgent
 from google.adk.agents.invocation_context import InvocationContext # Corrected path
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
 
 from config import (
     TASK_AGENT_MODEL,
+    USE_LITELLM, # Check if LiteLLM should be used
     WORKSPACE_DIR,
     ARTIFACT_PREFIX,
     agent_flow_logger,
     tool_calls_logger,
 )
-# Assuming tools and helpers are accessible
-# from ..core_tools import code_execution_tool, logging_tool, save_plot_artifact
-# from .code_generator import code_generator_tool # AgentTool
-# from .image_analyzer import image_analysis_tool # AgentTool
 
+# Import LiteLLM wrapper if needed
+if USE_LITELLM:
+    try:
+        from google.adk.models.lite_llm import LiteLlm
+        print("LiteLLM imported successfully for Trainer.")
+    except ImportError:
+        print("ERROR: LiteLLM specified in config, but 'litellm' package not found. pip install litellm")
+        LiteLlm = None
+else:
+    LiteLlm = None # Define as None if not used
+
+# --- Agent Definition ---
 class TrainingAgent(LlmAgent):
     def __init__(self, **kwargs):
+        # Determine model configuration
+        model_config = LiteLlm(model=TASK_AGENT_MODEL) if USE_LITELLM and LiteLlm else TASK_AGENT_MODEL
+
+        # Initialize tools map if not passed (will be populated by Orchestrator/Runner)
+        if 'tools' not in kwargs:
+             kwargs['tools'] = []
+
         super().__init__(
             name="TrainingAgent",
-            model=TASK_AGENT_MODEL,
+            model=model_config, # Use configured model
             instruction="""
 Your task is to manage the training of Machine Learning model(s) on a preprocessed dataset.
 1. You will receive the dataset identifier (e.g., 'd1') and a list of model configurations to train via state (e.g., `state['datasets'][dataset_id]['models_to_train'] = [{'type': 'LogisticRegression', 'params': {...}, 'model_base_id': 'LR'}, {'type': 'RandomForest', ...}]`).
@@ -36,9 +52,9 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
 3. Iterate through each model configuration in the 'models_to_train' list.
 4. For each configuration:
     a. Generate a unique model run ID (e.g., '{model_base_id}_{dataset_id}_run{timestamp}').
-    b. Formulate a detailed prompt for 'CodeGeneratorAgent' to write Python code (using scikit-learn or other relevant libraries) to:
+    b. Formulate a detailed prompt for 'CodeGeneratorAgent' tool to write Python code (using scikit-learn or other relevant libraries) to:
         i. Load the processed data from the specified path.
-        ii. Split data into training and testing sets (e.g., 80/20 split, stratified if classification).
+        ii. Split data into training and testing sets (e.g., 80/20 split, stratified if classification). Use random_state=42.
         iii. Instantiate the specified model type (`config['type']`) with the given hyperparameters (`config['params']`).
         iv. Train the model on the training set.
         v. Save the trained model (using joblib or pickle) to a unique path in the WORKSPACE directory (e.g., '{WORKSPACE_DIR}/model_{model_run_id}.pkl').
@@ -47,7 +63,7 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
         viii. Include necessary imports and error handling.
     c. Call 'CodeGeneratorAgent' tool.
     d. Call 'code_execution_tool' with the generated code.
-    e. Check status. Handle errors/retries. Log errors using 'logging_tool' (key 'trainer_log'). If a model fails, record status in state and continue to the next model if possible. # TODO: Implement robust retry/error handling.
+    e. Check status. Handle errors/retries. Log errors using 'logging_tool' (key 'trainer_log'). If a model fails, record status in state and continue to the next model if possible.
     f. If successful, parse 'output_files' for the 'model' path (and any 'plot' paths).
     g. Update the main state dictionary under `state['models'][model_run_id]` with: `path`, `type`, `params`, `dataset_id`, `status='trained'`, and any plot paths found. Use EventActions state_delta.
     h. If plots were generated, use the `save_plot_artifact` helper to save them as artifacts and update the state (`state['models'][model_run_id]['plots']`) with the artifact names.
@@ -66,11 +82,16 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
         except ImportError:
-             agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
-             self.save_plot_artifact_helper = None
+            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
+            self.save_plot_artifact_helper = None
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        # Refresh tool references
+        self.code_execution_tool = self.tools_map.get("code_execution_tool")
+        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Success" # Overall status
         error_message = None
@@ -96,7 +117,6 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
         if not models_to_train:
             error_message = f"No model configurations found in state ('datasets.{dataset_id}.models_to_train') to train."
             await self._log(error_message, ctx, level="WARNING")
-            # Not necessarily a failure of this agent, maybe just no models requested
             yield self._create_final_event(ctx, "Success", error_message)
             return
 
@@ -104,29 +124,28 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
         for model_config in models_to_train:
             model_type = model_config.get("type", "UnknownModel")
             model_params = model_config.get("params", {})
-            model_base_id = model_config.get("model_base_id", model_type) # e.g., 'LR' or 'RandomForest'
-            visualize_training = model_config.get("visualize_training", False) # Flag for learning curves etc.
+            model_base_id = model_config.get("model_base_id", model_type)
+            visualize_training = model_config.get("visualize_training", False)
 
             # 4a. Generate unique model run ID
             model_run_id = f"{model_base_id}_{dataset_id}_run{int(time.time())}"
             await self._log(f"Starting training for model config: {model_type}, Run ID: {model_run_id}", ctx)
 
             # 4b. Formulate prompt for Code Generator
-            model_filename = f"model_{model_run_id}.pkl" # Or .joblib
+            model_filename = f"model_{model_run_id}.pkl"
             absolute_model_path = os.path.abspath(os.path.join(WORKSPACE_DIR, model_filename))
             os.makedirs(WORKSPACE_DIR, exist_ok=True)
 
             plot_instructions = ""
             plot_output_convention = ""
             if visualize_training:
-                 plot_lc_filename = f"learning_curve_{model_run_id}.png"
-                 absolute_plot_lc_path = os.path.abspath(os.path.join(WORKSPACE_DIR, plot_lc_filename))
-                 plot_instructions = f"""
+                plot_lc_filename = f"learning_curve_{model_run_id}.png"
+                absolute_plot_lc_path = os.path.abspath(os.path.join(WORKSPACE_DIR, plot_lc_filename))
+                plot_instructions = f"""
 - After training, generate a learning curve plot using `sklearn.model_selection.learning_curve`.
 - Save the plot to '{absolute_plot_lc_path}'. Create the directory if needed.
 - Print the plot path: `print(f"SAVED_OUTPUT: plot_lc={absolute_plot_lc_path}")`"""
-                 plot_output_convention = "SAVED_OUTPUT: plot_lc=/path/to/plot.png"
-
+                plot_output_convention = "SAVED_OUTPUT: plot_lc=/path/to/plot.png"
 
             code_gen_prompt = f"""
 Write Python code using scikit-learn and joblib/pickle to train a '{model_type}' model.
@@ -149,14 +168,14 @@ Code:
             if self.code_generator_tool:
                 try:
                     async for event in self.code_generator_tool.run_async(ctx, user_content=genai_types.Content(parts=[genai_types.Part(text=code_gen_prompt)])):
-                         if event.is_final_response() and event.content and event.content.parts:
-                             generated_code = event.content.parts[0].text
-                             if generated_code:
-                                 generated_code = generated_code.strip().strip('`').strip()
-                                 if generated_code.startswith('python'): generated_code = generated_code[len('python'):].strip()
-                                 await self._log(f"Received training code for {model_run_id}.", ctx)
-                             else: current_model_error = "CodeGeneratorAgent returned empty code."
-                             break
+                        if event.is_final_response() and event.content and event.content.parts:
+                            generated_code = event.content.parts[0].text
+                            if generated_code:
+                                generated_code = generated_code.strip().strip('`').strip()
+                                if generated_code.startswith('python'): generated_code = generated_code[len('python'):].strip()
+                                await self._log(f"Received training code for {model_run_id}.", ctx)
+                            else: current_model_error = "CodeGeneratorAgent returned empty code."
+                            break
                     if not generated_code and not current_model_error: current_model_error = "CodeGeneratorAgent finished without returning code."
                 except Exception as e:
                     current_model_error = f"Error calling CodeGeneratorAgent: {e}"
@@ -164,16 +183,16 @@ Code:
                 current_model_error = "CodeGeneratorAgent tool not configured."
 
             if current_model_error:
-                 await self._log(current_model_error, ctx, level="ERROR")
-                 failed_model_configs.append(model_config)
-                 state_delta[f"models.{model_run_id}.status"] = "generation_failed"
-                 state_delta[f"models.{model_run_id}.error"] = current_model_error
-                 continue # Skip to the next model config
+                await self._log(current_model_error, ctx, level="ERROR")
+                failed_model_configs.append(model_config)
+                state_delta[f"models.{model_run_id}.status"] = "generation_failed"
+                state_delta[f"models.{model_run_id}.error"] = current_model_error
+                continue # Skip to the next model config
 
             # 4d & 4e. Call Code Execution Tool
             execution_result = None
             model_local_path = None
-            plot_local_path = None # For potential plot output
+            plot_local_path = None
             if generated_code and self.code_execution_tool:
                 try:
                     execution_result = await self.code_execution_tool.func(code_string=generated_code, tool_context=ctx)
@@ -182,24 +201,23 @@ Code:
                     if execution_result.get("status") != "success":
                         current_model_error = f"Training code execution failed for {model_run_id}. Stderr: {execution_result.get('stderr', 'N/A')}"
                         await self._log(current_model_error, ctx, level="ERROR")
-                        # TODO: Implement retry logic for execution failure if desired
                         failed_model_configs.append(model_config)
                         state_delta[f"models.{model_run_id}.status"] = "execution_failed"
                         state_delta[f"models.{model_run_id}.error"] = current_model_error
-                        continue # Skip to next model
+                        continue
 
                     # 4f. Parse output files
                     output_files = execution_result.get("output_files", {})
-                    model_local_path = output_files.get("model") # Matches SAVED_OUTPUT: model=...
-                    plot_local_path = output_files.get("plot_lc") # Matches SAVED_OUTPUT: plot_lc=...
+                    model_local_path = output_files.get("model")
+                    plot_local_path = output_files.get("plot_lc")
 
                     if not model_local_path or not os.path.exists(model_local_path):
-                         current_model_error = f"Training code ran but failed to produce/report model file for {model_run_id}. Found files: {output_files}"
-                         await self._log(current_model_error, ctx, level="ERROR")
-                         failed_model_configs.append(model_config)
-                         state_delta[f"models.{model_run_id}.status"] = "output_missing"
-                         state_delta[f"models.{model_run_id}.error"] = current_model_error
-                         continue # Skip to next model
+                        current_model_error = f"Training code ran but failed to produce/report model file for {model_run_id}. Found files: {output_files}"
+                        await self._log(current_model_error, ctx, level="ERROR")
+                        failed_model_configs.append(model_config)
+                        state_delta[f"models.{model_run_id}.status"] = "output_missing"
+                        state_delta[f"models.{model_run_id}.error"] = current_model_error
+                        continue
 
                 except Exception as e:
                     current_model_error = f"Error during code_execution_tool call for {model_run_id}: {e}"
@@ -207,14 +225,13 @@ Code:
                     failed_model_configs.append(model_config)
                     state_delta[f"models.{model_run_id}.status"] = "tool_error"
                     state_delta[f"models.{model_run_id}.error"] = current_model_error
-                    continue # Skip to next model
+                    continue
             elif not generated_code:
-                 # Error handled above, just continue
-                 continue
-            else: # Tool not configured
-                 error_message = "code_execution_tool not configured." # Overall error
-                 await self._log(error_message, ctx, level="ERROR")
-                 break # Stop processing further models if tool is missing
+                continue
+            else:
+                error_message = "code_execution_tool not configured."
+                await self._log(error_message, ctx, level="ERROR")
+                break
 
 
             # 4g. Update state for successful model
@@ -227,6 +244,7 @@ Code:
                     f"models.{model_run_id}.dataset_id": dataset_id,
                     f"models.{model_run_id}.status": "trained",
                     f"models.{model_run_id}.plots": [], # Initialize plots list
+                    f"models.{model_run_id}.error": None # Clear error
                 }
                 state_delta.update(model_state_updates)
                 await self._log(f"Successfully trained model {model_run_id}. Path: {model_local_path}", ctx)
@@ -236,16 +254,13 @@ Code:
                     plot_logical_name = f"learning_curve_{model_run_id}"
                     artifact_name = await self.save_plot_artifact_helper(plot_local_path, plot_logical_name, ctx)
                     if artifact_name:
-                         # Update the plots list for this specific model in the delta
-                         plot_list_key = f"models.{model_run_id}.plots"
-                         # Get potentially existing list from delta or initialize
-                         current_plots = state_delta.get(plot_list_key, [])
-                         current_plots.append(artifact_name)
-                         state_delta[plot_list_key] = current_plots
-                         await self._log(f"Saved training plot artifact '{artifact_name}' for model {model_run_id}", ctx)
+                        plot_list_key = f"models.{model_run_id}.plots"
+                        current_plots = state_delta.get(plot_list_key, [])
+                        current_plots.append(artifact_name)
+                        state_delta[plot_list_key] = current_plots
+                        await self._log(f"Saved training plot artifact '{artifact_name}' for model {model_run_id}", ctx)
                     else:
-                         await self._log(f"Failed to save training plot artifact for {model_run_id}", ctx, level="WARNING")
-
+                        await self._log(f"Failed to save training plot artifact for {model_run_id}", ctx, level="WARNING")
 
         # End of loop through model configs
 
@@ -254,17 +269,17 @@ Code:
             final_status = "Failure"
             error_message = f"All {len(failed_model_configs)} model training attempts failed."
         elif failed_model_configs:
-             final_status = "Partial Success"
-             error_message = f"Successfully trained {len(successful_model_ids)} models, but {len(failed_model_configs)} failed."
+            final_status = "Partial Success"
+            error_message = f"Successfully trained {len(successful_model_ids)} models, but {len(failed_model_configs)} failed."
         elif not successful_model_ids and not failed_model_configs:
-             final_status = "No Action" # Should not happen if models_to_train was not empty
-             error_message = "No models were successfully trained or failed."
+            final_status = "No Action"
+            error_message = "No models were successfully trained or failed."
         else:
-             final_status = "Success"
+            final_status = "Success"
 
         summary_message = f"Training completed. Status: {final_status}. Successful models: {successful_model_ids}."
-        if error_message:
-             summary_message += f" Issues: {error_message}"
+        if error_message and final_status != "Success": # Only add error details if not fully successful
+            summary_message += f" Issues: {error_message}"
 
         yield self._create_final_event(ctx, final_status, error_message, state_delta, summary_message)
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: <--- Exiting {self.name}. Status: {final_status}")
@@ -273,9 +288,10 @@ Code:
     # Helper methods (copy from DataLoadingAgent or move to base class)
     async def _log(self, message: str, ctx: InvocationContext, level: str = "INFO"):
         """Logs using the logging_tool."""
-        if self.logging_tool_func:
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        if logging_tool_func:
             try:
-                await self.logging_tool_func(message=message, log_file_key="trainer_log", tool_context=ctx, level=level)
+                await logging_tool_func(message=message, log_file_key="trainer_log", tool_context=ctx, level=level)
             except Exception as e:
                 agent_flow_logger.error(f"INVOKE_ID={ctx.invocation_id} ({self.name}): Failed to log via tool: {e}")
                 print(f"ERROR logging ({self.name}): {message}")
@@ -284,16 +300,20 @@ Code:
             print(f"LOG ({self.name}): {message}")
 
     def _create_final_event(self, ctx: InvocationContext, status: str, error_msg: Optional[str] = None, state_delta: Optional[Dict] = None, final_message: Optional[str] = None) -> Event:
-         """Creates the final event."""
-         message = final_message or f"{self.name} finished with status: {status}."
-         if error_msg and status != "Success":
-             message += f" Details: {error_msg}"
+        """Creates the final event."""
+        message = final_message or f"{self.name} finished with status: {status}."
+        if error_msg and status != "Success":
+            message += f" Details: {error_msg}"
 
-         return Event(
-             author=self.name,
-             invocation_id=ctx.invocation_id,
-             content=genai_types.Content(parts=[genai_types.Part(text=message)]),
-             actions=EventActions(state_delta=state_delta) if state_delta else None,
-             turn_complete=True,
-             error_message=error_msg if status != "Success" else None
-         )
+        return Event(
+            author=self.name,
+            invocation_id=ctx.invocation_id,
+            content=genai_types.Content(parts=[genai_types.Part(text=message)]),
+            actions=EventActions(state_delta=state_delta) if state_delta else None,
+            turn_complete=True,
+            error_message=error_msg if status != "Success" else None
+        )
+
+# --- Instantiate Agent ---
+training_agent = TrainingAgent(tools=[])
+print(f"--- TrainingAgent Instantiated (Model: {training_agent.model}) ---")

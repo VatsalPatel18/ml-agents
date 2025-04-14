@@ -13,21 +13,37 @@ from google.genai import types as genai_types
 
 from config import (
     TASK_AGENT_MODEL,
+    USE_LITELLM, # Check if LiteLLM should be used
     WORKSPACE_DIR,
     ARTIFACT_PREFIX,
     agent_flow_logger,
     tool_calls_logger,
 )
-# Assuming tools and helpers are accessible
-# from ..core_tools import code_execution_tool, logging_tool, save_plot_artifact
-# from .code_generator import code_generator_tool # AgentTool
-# from .image_analyzer import image_analysis_tool # AgentTool
 
+# Import LiteLLM wrapper if needed
+if USE_LITELLM:
+    try:
+        from google.adk.models.lite_llm import LiteLlm
+        print("LiteLLM imported successfully for Evaluator.")
+    except ImportError:
+        print("ERROR: LiteLLM specified in config, but 'litellm' package not found. pip install litellm")
+        LiteLlm = None
+else:
+    LiteLlm = None # Define as None if not used
+
+# --- Agent Definition ---
 class EvaluationAgent(LlmAgent):
     def __init__(self, **kwargs):
+        # Determine model configuration
+        model_config = LiteLlm(model=TASK_AGENT_MODEL) if USE_LITELLM and LiteLlm else TASK_AGENT_MODEL
+
+        # Initialize tools map if not passed (will be populated by Orchestrator/Runner)
+        if 'tools' not in kwargs:
+             kwargs['tools'] = []
+
         super().__init__(
             name="EvaluationAgent",
-            model=TASK_AGENT_MODEL,
+            model=model_config, # Use configured model
             instruction="""
 Your task is to manage the evaluation of one or more trained Machine Learning models.
 1. You will receive the dataset identifier (e.g., 'd1') and a list of model run IDs to evaluate via state (e.g., `state['evaluate_models'] = ['LR_d1_run1', 'RF_d1_run1']`).
@@ -35,9 +51,9 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
 3. Iterate through each model run ID in the list.
 4. For each model run ID:
     a. Retrieve the model path from state (`state['models'][model_run_id]['path']`).
-    b. Formulate a detailed prompt for 'CodeGeneratorAgent' to write Python code (using scikit-learn, pandas) to:
+    b. Formulate a detailed prompt for 'CodeGeneratorAgent' tool to write Python code (using scikit-learn, pandas) to:
         i. Load the processed data and the specific trained model from their paths.
-        ii. Ensure the data used for evaluation is appropriate (e.g., the test split if created during training, or the full dataset if specified). The training code should ideally have saved the test set indices or the test set itself. If not, assume the evaluation needs to re-split or use the whole dataset based on context (or ask Orchestrator/user). For now, assume the code needs to load the full processed data and potentially re-split using the same random_state=42 as training.
+        ii. Ensure the data used for evaluation is appropriate (e.g., the test split if created during training, or the full dataset if specified). Assume the code needs to load the full processed data and re-split using the same random_state=42 as training.
         iii. Make predictions on the test set.
         iv. Calculate standard evaluation metrics (e.g., accuracy, precision, recall, F1-score, AUC for classification; MSE, MAE, R2 for regression). Define the metrics needed based on the task type (e.g., `state['task']`).
         v. Print the calculated metrics as a JSON string using the convention: `print(f"METRICS: {json.dumps(metrics_dict)}")`.
@@ -45,10 +61,10 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
         vii. Include necessary imports and error handling.
     c. Call 'CodeGeneratorAgent' tool.
     d. Call 'code_execution_tool' with the generated code.
-    e. Check status. Handle errors/retries. Log errors using 'logging_tool' (key 'evaluator_log'). If evaluation fails for a model, record status in state and continue. # TODO: Implement robust retry/error handling.
+    e. Check status. Handle errors/retries. Log errors using 'logging_tool' (key 'evaluator_log'). If evaluation fails for a model, record status in state and continue.
     f. If successful, parse stdout for the 'METRICS' JSON string. Parse 'output_files' for any plot paths (e.g., 'plot_cm', 'plot_roc').
-    g. Update state: `state['models'][model_run_id]['metrics'] = parsed_metrics`, `state['models'][model_run_id]['status'] = 'evaluated'`. Use EventActions state_delta.
-    h. If plots were generated, use the `save_plot_artifact` helper to save them as artifacts and update the state (`state['models'][model_run_id]['plots']`) with the artifact names.
+    g. Update state: `models.{model_run_id}.metrics = parsed_metrics`, `models.{model_run_id}.status = 'evaluated'`. Use EventActions state_delta.
+    h. If plots were generated, use the `save_plot_artifact` helper to save them as artifacts and update the state (`models.{model_run_id}.plots`) with the artifact names.
     i. If image analysis is requested (`analyze_plots` flag), call 'ImageAnalysisAgent' tool for generated plot artifacts and store results in state.
 5. Use 'logging_tool' to log progress for each model evaluation attempt (key 'evaluator_log').
 6. Yield a final event summarizing the evaluation process (e.g., "Evaluated models: [list of model_run_ids]"). Include the cumulative state_delta.
@@ -66,11 +82,17 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
         except ImportError:
-             agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
-             self.save_plot_artifact_helper = None
+            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
+            self.save_plot_artifact_helper = None
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        # Refresh tool references
+        self.code_execution_tool = self.tools_map.get("code_execution_tool")
+        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+        self.image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
+
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Success" # Overall status
         error_message = None
@@ -124,14 +146,12 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
             plot_outputs = {} # To store expected plot outputs like {'plot_cm': '/path/...', 'plot_roc': '/path/...'}
             plot_instructions = ""
             if visualize_flag:
-                # Define expected plot outputs
                 cm_filename = f"confusion_matrix_{model_run_id}.png"
                 roc_filename = f"roc_curve_{model_run_id}.png"
                 abs_cm_path = os.path.abspath(os.path.join(WORKSPACE_DIR, cm_filename))
                 abs_roc_path = os.path.abspath(os.path.join(WORKSPACE_DIR, roc_filename))
                 plot_outputs["plot_cm"] = abs_cm_path
                 plot_outputs["plot_roc"] = abs_roc_path
-
                 plot_instructions = f"""
 - Generate evaluation plots:
   - Confusion Matrix: Save to '{abs_cm_path}'. Print path `print(f"SAVED_OUTPUT: plot_cm={abs_cm_path}")`.
@@ -143,7 +163,7 @@ Write Python code using scikit-learn, pandas, joblib/pickle, json, and matplotli
 - Load the trained model from: '{model_path}'.
 - Load the preprocessed data from: '{processed_data_path}'.
 - Assume the target column is named '{target_column}'.
-- Split the data into training and testing sets using the SAME 80/20 split and random_state=42 as potentially used in training (important for consistent evaluation). Use stratify if task is classification.
+- Split the data into training and testing sets using the SAME 80/20 split and random_state=42 as potentially used in training. Use stratify if task is classification.
 - Make predictions on the test set.
 - Calculate evaluation metrics appropriate for a '{task_type}' task (e.g., accuracy, precision, recall, f1, roc_auc for classification; mse, mae, r2 for regression). Store them in a dictionary called `metrics_dict`.
 - Print the metrics dictionary as a JSON string: {metrics_convention}.
@@ -156,7 +176,6 @@ Code:
             # 4c. Call CodeGeneratorAgent
             generated_code = None
             current_model_error = None
-            # (Error handling similar to TrainingAgent...)
             if self.code_generator_tool:
                 try:
                     async for event in self.code_generator_tool.run_async(ctx, user_content=genai_types.Content(parts=[genai_types.Part(text=code_gen_prompt)])):
@@ -175,16 +194,16 @@ Code:
                 current_model_error = "CodeGeneratorAgent tool not configured."
 
             if current_model_error:
-                 await self._log(current_model_error, ctx, level="ERROR")
-                 failed_model_ids.append(model_run_id)
-                 state_delta[f"models.{model_run_id}.status"] = "evaluation_failed"
-                 state_delta[f"models.{model_run_id}.error"] = current_model_error
-                 continue
+                await self._log(current_model_error, ctx, level="ERROR")
+                failed_model_ids.append(model_run_id)
+                state_delta[f"models.{model_run_id}.status"] = "evaluation_failed"
+                state_delta[f"models.{model_run_id}.error"] = current_model_error
+                continue
 
             # 4d & 4e. Call Code Execution Tool
             execution_result = None
             parsed_metrics = None
-            generated_plot_paths = {} # Store paths reported by the code
+            generated_plot_paths = {}
             if generated_code and self.code_execution_tool:
                 try:
                     execution_result = await self.code_execution_tool.func(code_string=generated_code, tool_context=ctx)
@@ -193,7 +212,6 @@ Code:
                     if execution_result.get("status") != "success":
                         current_model_error = f"Evaluation code execution failed for {model_run_id}. Stderr: {execution_result.get('stderr', 'N/A')}"
                         await self._log(current_model_error, ctx, level="ERROR")
-                        # TODO: Implement retry logic if desired
                         failed_model_ids.append(model_run_id)
                         state_delta[f"models.{model_run_id}.status"] = "evaluation_failed"
                         state_delta[f"models.{model_run_id}.error"] = current_model_error
@@ -207,20 +225,17 @@ Code:
                                 metrics_json = line.split(":", 1)[1].strip()
                                 parsed_metrics = json.loads(metrics_json)
                                 await self._log(f"Parsed metrics for {model_run_id}: {parsed_metrics}", ctx)
-                                break # Assume only one metrics line
+                                break
                             except Exception as e:
                                 await self._log(f"Failed to parse METRICS line for {model_run_id}: '{line}'. Error: {e}", ctx, level="WARNING")
 
                     output_files = execution_result.get("output_files", {})
                     for key, path in output_files.items():
-                         if key.startswith("plot_"): # Convention from prompt
-                             generated_plot_paths[key] = path
+                        if key.startswith("plot_"):
+                            generated_plot_paths[key] = path
 
                     if not parsed_metrics:
-                         await self._log(f"Warning: Metrics not found in stdout for {model_run_id}.", ctx, level="WARNING")
-                         # Consider this a failure or partial success? For now, treat as warning.
-                         # parsed_metrics = {"warning": "Metrics not found in output"}
-
+                        await self._log(f"Warning: Metrics not found in stdout for {model_run_id}.", ctx, level="WARNING")
 
                 except Exception as e:
                     current_model_error = f"Error during code_execution_tool call for {model_run_id}: {e}"
@@ -230,18 +245,18 @@ Code:
                     state_delta[f"models.{model_run_id}.error"] = current_model_error
                     continue
             elif not generated_code:
-                 continue # Error handled previously
-            else: # Tool not configured
-                 error_message = "code_execution_tool not configured."
-                 await self._log(error_message, ctx, level="ERROR")
-                 break # Stop processing further models
+                continue
+            else:
+                error_message = "code_execution_tool not configured."
+                await self._log(error_message, ctx, level="ERROR")
+                break
 
             # 4g. Update state for successful evaluation
             evaluated_model_ids.append(model_run_id)
             eval_state_updates = {
-                f"models.{model_run_id}.metrics": parsed_metrics or {}, # Store empty dict if parsing failed
+                f"models.{model_run_id}.metrics": parsed_metrics or {},
                 f"models.{model_run_id}.status": "evaluated",
-                f"models.{model_run_id}.error": None # Clear previous errors if any
+                f"models.{model_run_id}.error": None
             }
             state_delta.update(eval_state_updates)
             await self._log(f"Successfully evaluated model {model_run_id}.", ctx)
@@ -250,34 +265,33 @@ Code:
             saved_artifact_names = []
             if generated_plot_paths and self.save_plot_artifact_helper:
                 for plot_key, plot_local_path in generated_plot_paths.items():
-                     if os.path.exists(plot_local_path):
-                         plot_logical_name = f"{plot_key}_{model_run_id}" # e.g., plot_cm_LR_d1_run123
-                         artifact_name = await self.save_plot_artifact_helper(plot_local_path, plot_logical_name, ctx)
-                         if artifact_name:
-                             saved_artifact_names.append(artifact_name)
-                         else:
-                             await self._log(f"Failed to save evaluation plot artifact for {plot_local_path}", ctx, level="WARNING")
-                     else:
-                         await self._log(f"Plot file reported by code execution not found: {plot_local_path}", ctx, level="WARNING")
+                    if os.path.exists(plot_local_path):
+                        plot_logical_name = f"{plot_key}_{model_run_id}"
+                        artifact_name = await self.save_plot_artifact_helper(plot_local_path, plot_logical_name, ctx)
+                        if artifact_name:
+                            saved_artifact_names.append(artifact_name)
+                        else:
+                            await self._log(f"Failed to save evaluation plot artifact for {plot_local_path}", ctx, level="WARNING")
+                    else:
+                        await self._log(f"Plot file reported by code execution not found: {plot_local_path}", ctx, level="WARNING")
 
                 if saved_artifact_names:
-                     plot_list_key = f"models.{model_run_id}.plots"
-                     current_plots = state_delta.get(plot_list_key, models_state.get(model_run_id, {}).get('plots', [])) # Get existing plots
-                     if isinstance(current_plots, list):
-                         current_plots.extend(saved_artifact_names)
-                         state_delta[plot_list_key] = current_plots # Add new plots to delta
-                         await self._log(f"Updated plot artifacts in state for {model_run_id}: {saved_artifact_names}", ctx)
-                     else:
-                         await self._log(f"State key '{plot_list_key}' is not a list. Cannot append plot artifacts.", ctx, level="WARNING")
+                    plot_list_key = f"models.{model_run_id}.plots"
+                    # Get current plots from state (could have been added during training)
+                    current_plots = ctx.session.state.get("models", {}).get(model_run_id, {}).get("plots", [])
+                    if isinstance(current_plots, list):
+                        current_plots.extend(saved_artifact_names)
+                        state_delta[plot_list_key] = current_plots
+                        await self._log(f"Updated plot artifacts in state for {model_run_id}: {saved_artifact_names}", ctx)
+                    else:
+                        await self._log(f"State key '{plot_list_key}' is not a list.", ctx, level="WARNING")
 
 
             # 4i. Analyze plots if requested
             if analyze_plots_flag and saved_artifact_names and self.image_analysis_tool:
-                 for artifact_name in saved_artifact_names:
-                     # Use helper from PreprocessingAgent (or move to base class/util)
-                     # Need to handle the state passing mechanism carefully
-                     # await self._analyze_plot(ctx, dataset_id, artifact_name, "evaluation plot", state_delta)
-                     await self._log(f"Image analysis requested for {artifact_name}, but skipping in this version (requires state update before tool call).", ctx, level="WARNING")
+                for artifact_name in saved_artifact_names:
+                    # await self._analyze_plot(ctx, dataset_id, model_run_id, artifact_name, "evaluation plot", state_delta)
+                     await self._log(f"Image analysis requested for {artifact_name}, but skipping in this version.", ctx, level="WARNING")
 
 
         # End of loop through model IDs
@@ -287,17 +301,17 @@ Code:
             final_status = "Failure"
             error_message = f"All {len(failed_model_ids)} model evaluation attempts failed."
         elif failed_model_ids:
-             final_status = "Partial Success"
-             error_message = f"Successfully evaluated {len(evaluated_model_ids)} models, but {len(failed_model_ids)} failed."
+            final_status = "Partial Success"
+            error_message = f"Successfully evaluated {len(evaluated_model_ids)} models, but {len(failed_model_ids)} failed."
         elif not evaluated_model_ids and not failed_model_ids:
-             final_status = "No Action"
-             error_message = "No models were successfully evaluated or failed."
+            final_status = "No Action"
+            error_message = "No models were successfully evaluated or failed."
         else:
-             final_status = "Success"
+            final_status = "Success"
 
         summary_message = f"Evaluation completed. Status: {final_status}. Evaluated models: {evaluated_model_ids}."
-        if error_message:
-             summary_message += f" Issues: {error_message}"
+        if error_message and final_status != "Success":
+            summary_message += f" Issues: {error_message}"
 
         yield self._create_final_event(ctx, final_status, error_message, state_delta, summary_message)
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: <--- Exiting {self.name}. Status: {final_status}")
@@ -306,9 +320,10 @@ Code:
     # Helper methods (copy or use inheritance)
     async def _log(self, message: str, ctx: InvocationContext, level: str = "INFO"):
         """Logs using the logging_tool."""
-        if self.logging_tool_func:
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        if logging_tool_func:
             try:
-                await self.logging_tool_func(message=message, log_file_key="evaluator_log", tool_context=ctx, level=level)
+                await logging_tool_func(message=message, log_file_key="evaluator_log", tool_context=ctx, level=level)
             except Exception as e:
                 agent_flow_logger.error(f"INVOKE_ID={ctx.invocation_id} ({self.name}): Failed to log via tool: {e}")
                 print(f"ERROR logging ({self.name}): {message}")
@@ -317,17 +332,20 @@ Code:
             print(f"LOG ({self.name}): {message}")
 
     def _create_final_event(self, ctx: InvocationContext, status: str, error_msg: Optional[str] = None, state_delta: Optional[Dict] = None, final_message: Optional[str] = None) -> Event:
-         """Creates the final event."""
-         message = final_message or f"{self.name} finished with status: {status}."
-         if error_msg and status != "Success":
-             message += f" Details: {error_msg}"
+        """Creates the final event."""
+        message = final_message or f"{self.name} finished with status: {status}."
+        if error_msg and status != "Success":
+            message += f" Details: {error_msg}"
 
-         return Event(
-             author=self.name,
-             invocation_id=ctx.invocation_id,
-             content=genai_types.Content(parts=[genai_types.Part(text=message)]),
-             actions=EventActions(state_delta=state_delta) if state_delta else None,
-             turn_complete=True,
-             error_message=error_msg if status != "Success" else None
-         )
+        return Event(
+            author=self.name,
+            invocation_id=ctx.invocation_id,
+            content=genai_types.Content(parts=[genai_types.Part(text=message)]),
+            actions=EventActions(state_delta=state_delta) if state_delta else None,
+            turn_complete=True,
+            error_message=error_msg if status != "Success" else None
+        )
 
+# --- Instantiate Agent ---
+evaluation_agent = EvaluationAgent(tools=[])
+print(f"--- EvaluationAgent Instantiated (Model: {evaluation_agent.model}) ---")
