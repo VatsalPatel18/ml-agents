@@ -73,13 +73,6 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
             **kwargs # Pass tools, callbacks etc.
         )
 
-        try:
-            from core_tools.artifact_helpers import save_plot_artifact
-            self.save_plot_artifact_helper = save_plot_artifact
-        except ImportError:
-            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
-            self.save_plot_artifact_helper = None
-
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references
@@ -87,6 +80,13 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
         logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
         code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
         image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
+
+        save_plot_artifact_helper = None
+        try:
+            from core_tools.artifact_helpers import save_plot_artifact
+            save_plot_artifact_helper = save_plot_artifact
+        except ImportError:
+            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Success" # Overall status

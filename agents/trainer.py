@@ -73,13 +73,6 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
             description="Trains one or more ML models using generated code based on configurations in state.",
             **kwargs # Pass tools, callbacks etc.
         )
-        try:
-            from core_tools.artifact_helpers import save_plot_artifact
-            self.save_plot_artifact_helper = save_plot_artifact
-        except ImportError:
-            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
-            self.save_plot_artifact_helper = None
-
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references
@@ -93,6 +86,13 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
         state_delta = {} # Accumulate all state changes
         successful_model_ids = []
         failed_model_configs = []
+
+        save_plot_artifact_helper = None
+        try:
+            from core_tools.artifact_helpers import save_plot_artifact
+            save_plot_artifact_helper = save_plot_artifact
+        except ImportError:
+            agent_flow_logger.error(f"{self.name}: Could not import save_plot_artifact helper!")
 
         # 1 & 2: Get context from state
         dataset_id = ctx.session.state.get("current_dataset_id", "d1")
