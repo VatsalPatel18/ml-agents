@@ -58,18 +58,12 @@ Your task is to manage the loading of a specified dataset.
             description="Loads a dataset using generated code and updates state with its local path.",
             **kwargs # Pass tools, callbacks etc.
         )
-        # Store tool functions/maps for easier access in _run_async_impl
-        # These will be populated by the runner/orchestrator when the agent is used
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent") # AgentTool instance
-        self.code_execution_tool = self.tools_map.get("code_execution_tool") # FunctionTool instance
-
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references within the run context if needed, as they might be updated
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+        code_execution_tool = self.tools_map.get("code_execution_tool")
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Failure"

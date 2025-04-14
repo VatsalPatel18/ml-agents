@@ -72,12 +72,7 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
             description="Evaluates trained models using generated code, calculates metrics, optionally visualizes/analyzes plots, and updates state.",
             **kwargs # Pass tools, callbacks etc.
         )
-        # Store tool references
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
-        self.image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
-        # Import helper
+
         try:
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
@@ -88,10 +83,10 @@ Your task is to manage the evaluation of one or more trained Machine Learning mo
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
-        self.image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
+        code_execution_tool = self.tools_map.get("code_execution_tool")
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+        image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Success" # Overall status

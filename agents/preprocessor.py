@@ -71,14 +71,6 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
             description="Preprocesses data using generated code, optionally visualizes/analyzes plots, and updates state.",
             **kwargs # Pass tools, callbacks etc.
         )
-        # Store tool references if passed via kwargs for easier access
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None # Get the underlying function
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
-        self.image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
-        self.human_approval_tool_func = self.tools_map.get("human_approval_tool").func if self.tools_map.get("human_approval_tool") else None
-
-        # Import helper here or ensure it's globally available
         try:
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
@@ -88,6 +80,12 @@ Your task is to manage the preprocessing of a loaded dataset based on a defined 
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        code_execution_tool = self.tools_map.get("code_execution_tool")
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None # Get the underlying function
+        code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+        image_analysis_tool = self.tools_map.get("ImageAnalysisAgent")
+        human_approval_tool_func = self.tools_map.get("human_approval_tool").func if self.tools_map.get("human_approval_tool") else None
+
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Failure"
         error_message = None

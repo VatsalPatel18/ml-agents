@@ -65,9 +65,6 @@ Your task is to generate a comprehensive report summarizing the completed ML wor
             description="Generates a Markdown summary report of the ML workflow based on session state.",
             **kwargs # Pass tools, callbacks etc.
         )
-        # Store tool references
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references

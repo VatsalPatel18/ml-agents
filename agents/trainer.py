@@ -73,11 +73,6 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
             description="Trains one or more ML models using generated code based on configurations in state.",
             **kwargs # Pass tools, callbacks etc.
         )
-        # Store tool references
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
-        # Import helper
         try:
             from core_tools.artifact_helpers import save_plot_artifact
             self.save_plot_artifact_helper = save_plot_artifact
@@ -88,9 +83,9 @@ Your task is to manage the training of Machine Learning model(s) on a preprocess
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         # Refresh tool references
-        self.code_execution_tool = self.tools_map.get("code_execution_tool")
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
+        code_execution_tool = self.tools_map.get("code_execution_tool")
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        code_generator_tool = self.tools_map.get("CodeGeneratorAgent")
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
         final_status = "Success" # Overall status

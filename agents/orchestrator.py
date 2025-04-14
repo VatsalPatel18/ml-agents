@@ -111,15 +111,18 @@ You are the ML Copilot Orchestrator... (Instruction remains the same as before)
             **kwargs # Pass any other standard BaseAgent args
         )
         # Store tool functions/maps for easier access in _run_async_impl
-        self.logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
-        self.human_approval_tool_func = self.tools_map.get("human_approval_tool").func if self.tools_map.get("human_approval_tool") else None
         agent_flow_logger.info(f"{self.name} initialized with tools: {[t.name for t in self.tools]}")
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        # --- _run_async_impl Logic Remains Largely the Same ---
-        # It now uses self.task_agent_tools_map to find the correct AgentTool instance
-        # based on the agent name derived from the current step.
+        
+        logging_tool_func = self.tools_map.get("logging_tool").func if self.tools_map.get("logging_tool") else None
+        human_approval_tool_func = self.tools_map.get("human_approval_tool").func if self.tools_map.get("human_approval_tool") else None
+        # Map agent names to their corresponding AgentTool instances from self.tools_map
+        task_agent_tools_map = {
+             tool.agent.name: tool for tool in self.tools
+             if isinstance(tool, agent_tool.AgentTool)
+        }
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
 
