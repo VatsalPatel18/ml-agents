@@ -1,0 +1,22 @@
+2025-04-18 03:55:53,904 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: model='gemma4:3b' llm_client=<google.adk.models.lite_llm.LiteLLMClient object at 0x7389849b8b10>
+2025-04-18 03:55:53,904 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 03:55:53,905 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 03:55:53,905 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 03:55:53,905 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 03:55:53,905 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 03:55:53,906 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:55:53,906 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 03:55:53,906 - AgentFlow - INFO - Session created: session_a253622b-92be-43ea-be06-8e24469023c6 for user ml_user_main
+2025-04-18 03:56:04,669 - AgentFlow - INFO - SESSION=session_a253622b-92be-43ea-be06-8e24469023c6: Initial user query: Train regression
+2025-04-18 03:56:04,669 - AgentFlow - INFO - SESSION=session_a253622b-92be-43ea-be06-8e24469023c6: Invoking runner.run_async...
+2025-04-18 03:56:04,670 - AgentFlow - INFO - INVOKE_ID=e-20d23d40-0369-4825-81a5-9797bfd30583: ---> Entering Agent 'MLOrchestratorAgent'
+2025-04-18 03:56:04,670 - AgentFlow - INFO - INVOKE_ID=e-20d23d40-0369-4825-81a5-9797bfd30583: ---> Entering MLOrchestratorAgent
+2025-04-18 03:56:06,492 - AgentFlow - INFO - INVOKE_ID=e-20d23d40-0369-4825-81a5-9797bfd30583: <--- Exiting Agent 'MLOrchestratorAgent'
+2025-04-18 03:56:06,492 - AgentFlow - INFO - SESSION=session_a253622b-92be-43ea-be06-8e24469023c6: Runner execution finished. Duration: 1.82 seconds.
+2025-04-18 03:56:06,493 - AgentFlow - INFO - SESSION=session_a253622b-92be-43ea-be06-8e24469023c6: Final artifacts list: []

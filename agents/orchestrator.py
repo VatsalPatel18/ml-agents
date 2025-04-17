@@ -163,11 +163,19 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
         # --- Initial Goal Understanding (Interactive) ---
         if ctx.session.state.get("current_step") is None:
             # Interactive setup: ask user for core workflow parameters
+            import os
             print("\n--- ML Workflow Setup ---")
-            dataset_path = input("Dataset path (e.g., ./my_data.csv): ").strip()
-            if not dataset_path:
-                print("No dataset path provided. Exiting.")
-                return
+            # Prompt until a non-empty path is provided
+            while True:
+                dataset_path = input("Dataset path (e.g., ./my_data.csv): ").strip()
+                if dataset_path:
+                    break
+                print("No dataset path provided.")
+                list_dir = input("List current directory? (y/n): ").strip().lower()
+                if list_dir in ("y", "yes"):
+                    for f in os.listdir('.'):
+                        print(f"- {f}")
+                # Continue prompt
             task_type = input("Task type (classification/regression) [classification]: ").strip() or "classification"
             if task_type.lower() == "classification":
                 class_type = input("Classification type (binary/multiclass) [binary]: ").strip() or "binary"
@@ -176,21 +184,30 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
             workflow_plan = ["load", "preprocess", "train", "evaluate", "report", "done"]
             # Build initial dataset and model configs
             models_to_train: List[Dict[str, Any]] = []
-            print("Enter models to train (e.g., LogisticRegression). Leave blank to finish.")
+            print("Enter models to train (e.g., LogisticRegression). At least one required.")
             while True:
-                model_name = input("Model type: ").strip()
+                model_name = input("Model type (blank to finish): ").strip()
                 if not model_name:
-                    break
-                params_text = input("Model params as JSON (e.g., {\"C\":1.0}): ").strip() or "{}"
-                try:
-                    model_params = json.loads(params_text)
-                except Exception:
-                    print("Invalid JSON. Using empty params.")
-                    model_params = {}
-                models_to_train.append({"type": model_name, "params": model_params, "model_base_id": model_name})
-            if not models_to_train:
-                print("No models specified. Exiting.")
-                return
+                    if models_to_train:
+                        break
+                    print("At least one model must be specified.")
+                    continue
+                # Prompt for JSON params until valid or blank
+                while True:
+                    params_text = input("Model params as JSON (blank for {}): ").strip()
+                    if not params_text:
+                        model_params = {}
+                        break
+                    try:
+                        model_params = json.loads(params_text)
+                        break
+                    except json.JSONDecodeError:
+                        print("Invalid JSON. Please try again.")
+                models_to_train.append({
+                    "type": model_name,
+                    "params": model_params,
+                    "model_base_id": model_name,
+                })
             # Assemble state delta
             state_delta: Dict[str, Any] = {
                 "user_goal": f"Train {task_type} model(s)",
@@ -198,12 +215,13 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
                 "workflow_plan": workflow_plan,
                 "datasets": {
                     "d1": {
-                        "path": dataset_path,
+                        # Use raw_path_source for DataLoadingAgent
+                        "raw_path_source": dataset_path,
                         "target_column": "target",
                         "models_to_train": models_to_train,
                         "plots": [],
                         "analysis": {},
-                        "preprocess_strategy": {}
+                        "preprocess_strategy": {},
                     }
                 },
                 "current_dataset_id": "d1",
