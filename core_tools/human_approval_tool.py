@@ -2,7 +2,7 @@
 import logging
 from typing import Dict, Any, Optional
 
-from google.adk.tools import FunctionTool
+from google.adk.tools.function_tool import FunctionTool
 from google.adk.tools.tool_context import ToolContext
 
 from config import tool_calls_logger # Use shared logger

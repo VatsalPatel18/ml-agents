@@ -49,7 +49,7 @@ import uuid # Added for session IDs
 import json # Added for state inspection
 
 # --- ADK Core ---
-from google.adk.tools import AgentTool # Corrected import location!
+from google.adk.tools.agent_tool import AgentTool  # Correct import for AgentTool
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts import InMemoryArtifactService # Or GcsArtifactService

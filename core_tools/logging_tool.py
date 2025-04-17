@@ -4,7 +4,7 @@ import os
 import datetime
 from typing import Dict, Any
 
-from google.adk.tools import FunctionTool
+from google.adk.tools.function_tool import FunctionTool
 from google.adk.tools.tool_context import ToolContext
 
 from config import LOG_DIR, LOG_TIMESTAMP_FORMAT, tool_calls_logger # Import shared config

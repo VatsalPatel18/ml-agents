@@ -7,7 +7,7 @@ import subprocess
 import json
 from typing import Dict, Any
 
-from google.adk.tools import FunctionTool
+from google.adk.tools.function_tool import FunctionTool
 from google.adk.tools.tool_context import ToolContext
 
 # Import config and placeholders (though placeholder func isn't used directly)
