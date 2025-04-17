@@ -1,0 +1,33 @@
+2025-04-18 04:14:09,177 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: gemini-1.5-flash-latest
+2025-04-18 04:14:09,177 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 04:14:09,178 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 04:14:09,178 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 04:14:09,178 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 04:14:09,178 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 04:14:09,179 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 04:14:09,179 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 04:14:09,179 - AgentFlow - INFO - Session created: session_b5b65061-2afd-4222-b82f-c717e4267e89 for user ml_user_main
+2025-04-18 04:14:09,179 - AgentFlow - INFO - SESSION=session_b5b65061-2afd-4222-b82f-c717e4267e89: Initial user query: my_data.csv
+2025-04-18 04:14:09,179 - AgentFlow - INFO - SESSION=session_b5b65061-2afd-4222-b82f-c717e4267e89: Invoking runner.run_async...
+2025-04-18 04:14:09,179 - AgentFlow - INFO - INVOKE_ID=e-8c309bb8-7dc1-45a3-a96a-c4b5661b36c7: ---> Entering Agent 'MLOrchestratorAgent'
+2025-04-18 04:14:09,179 - AgentFlow - INFO - INVOKE_ID=e-8c309bb8-7dc1-45a3-a96a-c4b5661b36c7: ---> Entering MLOrchestratorAgent
+2025-04-18 04:14:09,179 - AgentFlow - ERROR - SESSION=session_b5b65061-2afd-4222-b82f-c717e4267e89: Unhandled error during runner execution:
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/main.py", line 274, in main
+    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/runners.py", line 197, in run_async
+    async for event in invocation_context.agent.run_async(invocation_context):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/agents/base_agent.py", line 141, in run_async
+    async for event in self._run_async_impl(ctx):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 190, in _run_async_impl
+    model_name = input("Model type (blank to finish): ").strip()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EOFError: EOF when reading a line
+2025-04-18 04:14:09,180 - AgentFlow - INFO - SESSION=session_b5b65061-2afd-4222-b82f-c717e4267e89: Runner execution finished. Duration: 0.00 seconds.
+2025-04-18 04:14:09,180 - AgentFlow - INFO - SESSION=session_b5b65061-2afd-4222-b82f-c717e4267e89: Final artifacts list: []

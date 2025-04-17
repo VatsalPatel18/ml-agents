@@ -184,6 +184,7 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
             workflow_plan = ["load", "preprocess", "train", "evaluate", "report", "done"]
             # Build initial dataset and model configs
             models_to_train: List[Dict[str, Any]] = []
+            import json
             print("Enter models to train (e.g., LogisticRegression). At least one required.")
             while True:
                 model_name = input("Model type (blank to finish): ").strip()
@@ -192,21 +193,12 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
                         break
                     print("At least one model must be specified.")
                     continue
-                # Prompt for JSON params until valid or blank
-                while True:
-                    params_text = input("Model params as JSON (blank for {}): ").strip()
-                    if not params_text:
-                        model_params = {}
-                        break
-                    try:
-                        model_params = json.loads(params_text)
-                        break
-                    except json.JSONDecodeError:
-                        print("Invalid JSON. Please try again.")
+                # Let the agent choose default hyperparameters if not provided
+                model_params: Dict[str, Any] = {}
                 models_to_train.append({
-                    "type": model_name,
-                    "params": model_params,
-                    "model_base_id": model_name,
+                    'type': model_name,
+                    'params': model_params,
+                    'model_base_id': model_name,
                 })
             # Assemble state delta
             state_delta: Dict[str, Any] = {

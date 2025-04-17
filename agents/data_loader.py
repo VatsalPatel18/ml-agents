@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any, AsyncGenerator
 from google.adk.agents import LlmAgent
 from pydantic import Field
 from google.adk.agents.invocation_context import InvocationContext # Corrected path
+from google.adk.tools.tool_context import ToolContext  # For wrapping tool context
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
 
@@ -103,20 +104,24 @@ Code:
 
         # 4. Call CodeGeneratorAgent (as a tool)
         generated_code = None
-        if self.code_generator_tool:
+        if code_generator_tool:
             try:
-                async for event in self.code_generator_tool.run_async(ctx, user_content=genai_types.Content(parts=[genai_types.Part(text=code_gen_prompt)])):
-                    if event.is_final_response() and event.content and event.content.parts:
-                        generated_code = event.content.parts[0].text
-                        break
-                if generated_code:
+                # Wrap InvocationContext into ToolContext
+                tg_ctx = ToolContext(ctx)
+                # Call the CodeGeneratorAgent tool and get generated code
+                generated_code = await code_generator_tool.run_async(
+                    args={'request': code_gen_prompt},
+                    tool_context=tg_ctx,
+                )
+                if isinstance(generated_code, str):
                     generated_code = generated_code.strip().strip('`').strip()
                     if generated_code.startswith('python'):
                         generated_code = generated_code[len('python'):].strip()
-                    await self._log_message(f"Received generated code from CodeGeneratorAgent.", ctx)
+                    await self._log_message("Received generated code from CodeGeneratorAgent.", ctx)
                 else:
-                    error_message = "CodeGeneratorAgent did not return code."
+                    error_message = "CodeGeneratorAgent did not return code as string."
                     await self._log_message(error_message, ctx, level="ERROR")
+                    generated_code = None
             except Exception as e:
                 error_message = f"Error calling CodeGeneratorAgent: {e}"
                 await self._log_message(error_message, ctx, level="ERROR")
@@ -127,9 +132,14 @@ Code:
         # 5 & 6. Call Code Execution Tool
         execution_result = None
         if generated_code and not error_message:
-            if self.code_execution_tool:
+            if code_execution_tool:
                 try:
-                    execution_result = await self.code_execution_tool.func(code_string=generated_code, tool_context=ctx)
+                    # Wrap InvocationContext into ToolContext for code execution
+                    exec_ctx = ToolContext(ctx)
+                    execution_result = await code_execution_tool.func(
+                        code_string=generated_code,
+                        tool_context=exec_ctx,
+                    )
                     await self._log_message(f"Code execution attempted. Status: {execution_result.get('status')}", ctx)
                 except Exception as e:
                     error_message = f"Error calling code_execution_tool: {e}"
