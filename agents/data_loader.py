@@ -5,6 +5,7 @@ import os
 from typing import Optional, Dict, Any, AsyncGenerator
 
 from google.adk.agents import LlmAgent
+from pydantic import Field
 from google.adk.agents.invocation_context import InvocationContext # Corrected path
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
@@ -30,6 +31,8 @@ else:
 
 # --- Agent Definition ---
 class DataLoadingAgent(LlmAgent):
+    # Mapping of tool names to their Tool instances (injected post-init)
+    tools_map: Dict[str, Any] = Field(default_factory=dict)
     def __init__(self, **kwargs):
         # Determine model configuration
         model_config = LiteLlm(model=TASK_AGENT_MODEL) if USE_LITELLM and LiteLlm else TASK_AGENT_MODEL

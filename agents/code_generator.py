@@ -47,9 +47,9 @@ from google.adk.tools import agent_tool
 # --- Wrap as AgentTool ---
 # Provides other agents a function-like tool to invoke the CodeGeneratorAgent
 try:
+    # Wrap the CodeGeneratorAgent so it can be invoked as a tool
     code_generator_tool = agent_tool.AgentTool(
-        agent=code_generator_agent,
-        description="Use this tool to generate Python code for specific ML tasks (data loading, preprocessing, training, evaluation, plotting). Provide a detailed prompt describing the task, file paths, libraries, and expected output conventions (e.g., print 'SAVED_OUTPUT: name=path')."
+        agent=code_generator_agent
     )
     print(f"--- CodeGeneratorAgent wrapped as tool: {code_generator_tool.name} ---")
 except Exception as e:

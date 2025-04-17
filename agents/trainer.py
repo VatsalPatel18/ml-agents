@@ -8,6 +8,7 @@ import time
 from typing import Optional, Dict, Any, AsyncGenerator, List
 
 from google.adk.agents import LlmAgent
+from pydantic import Field
 from google.adk.agents.invocation_context import InvocationContext # Corrected path
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
@@ -34,17 +35,18 @@ else:
 
 # --- Agent Definition ---
 class TrainingAgent(LlmAgent):
+    # Mapping of tool names to their Tool instances (injected post-init)
+    tools_map: Dict[str, Any] = Field(default_factory=dict)
     def __init__(self, **kwargs):
-        # Determine model configuration
-        model_config = LiteLlm(model=TASK_AGENT_MODEL) if USE_LITELLM and LiteLlm else TASK_AGENT_MODEL
-
-        # Initialize tools map if not passed (will be populated by Orchestrator/Runner)
+        # Determine model configuration: use LiteLlm wrapper or direct model string
+        model_config = LiteLlm(model=TASK_AGENT_MODEL) if (USE_LITELLM and LiteLlm) else TASK_AGENT_MODEL
+        # Initialize tools map if not passed
         if 'tools' not in kwargs:
-             kwargs['tools'] = []
-
+            kwargs['tools'] = []
+        # Call base constructor with model_config (str or LiteLlm) as 'model'
         super().__init__(
             name="TrainingAgent",
-            model=model_config, # Use configured model
+            model=model_config,  # Use configured model or LiteLLM wrapper
             instruction="""
 Your task is to manage the training of Machine Learning model(s) on a preprocessed dataset.
 1. You will receive the dataset identifier (e.g., 'd1') and a list of model configurations to train via state (e.g., `state['datasets'][dataset_id]['models_to_train'] = [{'type': 'LogisticRegression', 'params': {...}, 'model_base_id': 'LR'}, {'type': 'RandomForest', ...}]`).

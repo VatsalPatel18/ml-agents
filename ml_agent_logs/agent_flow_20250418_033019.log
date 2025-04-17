@@ -1,0 +1,35 @@
+2025-04-18 03:30:19,588 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: gemini-1.5-flash-latest
+2025-04-18 03:30:19,588 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 03:30:19,589 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 03:30:19,589 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 03:30:19,589 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:30:19,589 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 03:30:19,589 - AgentFlow - INFO - Session created: session_706d4221-5495-4f18-9121-77962b7b1133 for user ml_user_main
+2025-04-18 03:30:19,589 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Initial user query: ./my_data.csv
+2025-04-18 03:30:19,589 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Invoking runner.run_async...
+2025-04-18 03:30:19,590 - AgentFlow - INFO - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef: ---> Entering Agent 'MLOrchestratorAgent'
+2025-04-18 03:30:19,590 - AgentFlow - INFO - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef: ---> Entering MLOrchestratorAgent
+2025-04-18 03:30:19,590 - AgentFlow - ERROR - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:30:19,590 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Orchestrator yielded final event. Status: Success. Content snippet: Starting workflow: ['load', 'preprocess', 'train', 'evaluate', 'report', 'done']...
+2025-04-18 03:30:19,690 - AgentFlow - ERROR - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:30:19,691 - AgentFlow - ERROR - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:30:19,691 - AgentFlow - ERROR - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef: Unhandled error invoking DataLoadingAgent
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 311, in _run_async_impl
+    async for event in target_agent_tool.run_async(ctx, user_content=step_input_content):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.run_async() got an unexpected keyword argument 'user_content'
+2025-04-18 03:30:19,691 - AgentFlow - ERROR - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:30:19,692 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Orchestrator yielded final event. Status: Error. Content snippet: MLOrchestratorAgent finished workflow execution with status: Failure. Error encountered: Error invoking DataLoadingAgent: AgentTool.run_async() got an unexpected keyword argument 'user_content'...
+2025-04-18 03:30:19,692 - AgentFlow - INFO - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef: <--- Exiting MLOrchestratorAgent Workflow Loop.
+2025-04-18 03:30:19,692 - AgentFlow - INFO - INVOKE_ID=e-c8f0aaae-6a2e-4775-a05e-c259059a25ef: <--- Exiting Agent 'MLOrchestratorAgent'
+2025-04-18 03:30:19,692 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Runner execution finished. Duration: 0.10 seconds.
+2025-04-18 03:30:19,692 - AgentFlow - INFO - SESSION=session_706d4221-5495-4f18-9121-77962b7b1133: Final artifacts list: []

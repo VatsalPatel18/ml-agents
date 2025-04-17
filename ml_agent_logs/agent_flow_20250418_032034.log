@@ -1,0 +1,30 @@
+2025-04-18 03:20:34,209 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: gemini-1.5-flash-latest
+2025-04-18 03:20:34,209 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 03:20:34,209 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 03:20:34,210 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 03:20:34,210 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:20:34,210 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 03:20:34,210 - AgentFlow - INFO - Session created: session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c for user ml_user_main
+2025-04-18 03:20:34,210 - AgentFlow - INFO - SESSION=session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c: Initial user query: i want to train a binary classification model
+2025-04-18 03:20:34,210 - AgentFlow - INFO - SESSION=session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c: Invoking runner.run_async...
+2025-04-18 03:20:34,210 - AgentFlow - INFO - INVOKE_ID=e-999f6df7-41d6-40c9-b669-3e5b68421065: ---> Entering Agent 'MLOrchestratorAgent'
+2025-04-18 03:20:34,210 - AgentFlow - INFO - INVOKE_ID=e-999f6df7-41d6-40c9-b669-3e5b68421065: ---> Entering MLOrchestratorAgent
+2025-04-18 03:20:34,211 - AgentFlow - ERROR - INVOKE_ID=e-999f6df7-41d6-40c9-b669-3e5b68421065 (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:20:34,211 - AgentFlow - ERROR - Failed to parse initial query using LLM: LlmAgent._run_async_impl() got an unexpected keyword argument 'initial_user_content'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 180, in _run_async_impl
+    async for event in super(MLOrchestratorAgent, self)._run_async_impl(ctx, initial_user_content=genai_types.Content(parts=[genai_types.Part(text=parsing_prompt)])):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: LlmAgent._run_async_impl() got an unexpected keyword argument 'initial_user_content'
+2025-04-18 03:20:34,211 - AgentFlow - INFO - SESSION=session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c: Orchestrator yielded final event. Status: Error. Content snippet: MLOrchestratorAgent finished workflow execution with status: Failure. Error encountered: Sorry, I couldn't understand the initial request structure: LlmAgent._run_async_impl() got an unexpected keywor...
+2025-04-18 03:20:34,211 - AgentFlow - INFO - INVOKE_ID=e-999f6df7-41d6-40c9-b669-3e5b68421065: <--- Exiting Agent 'MLOrchestratorAgent'
+2025-04-18 03:20:34,211 - AgentFlow - INFO - SESSION=session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c: Runner execution finished. Duration: 0.00 seconds.
+2025-04-18 03:20:34,211 - AgentFlow - INFO - SESSION=session_b2e83482-be72-4371-b6c5-b1f9dbb3f55c: Final artifacts list: []

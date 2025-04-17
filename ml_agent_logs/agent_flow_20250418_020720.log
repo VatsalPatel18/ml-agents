@@ -1,0 +1,48 @@
+2025-04-18 02:07:21,831 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: model='gpt-4.1' llm_client=<google.adk.models.lite_llm.LiteLLMClient object at 0x72813aa3fc90>
+2025-04-18 02:07:21,831 - AgentFlow - ERROR - Failed to create AgentTool for DataLoadingAgent in Orchestrator: AgentTool.__init__() got an unexpected keyword argument 'description'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 78, in __init__
+    tool_wrapper = agent_tool.AgentTool(
+                   ^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.__init__() got an unexpected keyword argument 'description'
+2025-04-18 02:07:21,832 - AgentFlow - ERROR - Failed to create AgentTool for PreprocessingAgent in Orchestrator: AgentTool.__init__() got an unexpected keyword argument 'description'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 78, in __init__
+    tool_wrapper = agent_tool.AgentTool(
+                   ^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.__init__() got an unexpected keyword argument 'description'
+2025-04-18 02:07:21,832 - AgentFlow - ERROR - Failed to create AgentTool for TrainingAgent in Orchestrator: AgentTool.__init__() got an unexpected keyword argument 'description'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 78, in __init__
+    tool_wrapper = agent_tool.AgentTool(
+                   ^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.__init__() got an unexpected keyword argument 'description'
+2025-04-18 02:07:21,832 - AgentFlow - ERROR - Failed to create AgentTool for EvaluationAgent in Orchestrator: AgentTool.__init__() got an unexpected keyword argument 'description'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 78, in __init__
+    tool_wrapper = agent_tool.AgentTool(
+                   ^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.__init__() got an unexpected keyword argument 'description'
+2025-04-18 02:07:21,832 - AgentFlow - ERROR - Failed to create AgentTool for ReportingAgent in Orchestrator: AgentTool.__init__() got an unexpected keyword argument 'description'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 78, in __init__
+    tool_wrapper = agent_tool.AgentTool(
+                   ^^^^^^^^^^^^^^^^^^^^^
+TypeError: AgentTool.__init__() got an unexpected keyword argument 'description'
+2025-04-18 02:07:21,832 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 02:07:21,834 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 02:07:21,834 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 02:07:21,834 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 02:07:21,834 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 02:07:21,834 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 02:07:21,834 - AgentFlow - ERROR - Failed to configure or wrap agent DataLoadingAgent: "DataLoadingAgent" object has no field "tools_map"
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/main.py", line 166, in main
+    agent.tools_map = {t.name: t for t in current_agent_tools}
+    ^^^^^^^^^^^^^^^
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/pydantic/main.py", line 1000, in __setattr__
+    elif (setattr_handler := self._setattr_handler(name, value)) is not None:
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/pydantic/main.py", line 1047, in _setattr_handler
+    raise ValueError(f'"{cls.__name__}" object has no field "{name}"')
+ValueError: "DataLoadingAgent" object has no field "tools_map"

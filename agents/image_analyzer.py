@@ -141,12 +141,9 @@ image_analysis_agent._run_async_impl = image_analyzer_run_override.__get__(image
 
 # --- Wrap as AgentTool ---
 try:
+    # Wrap the ImageAnalysisAgent so it can be invoked as a tool
     image_analysis_tool = agent_tool.AgentTool(
-        agent=image_analysis_agent,
-        description=(
-            "Use this tool to analyze an image file and answer a question about it. "
-            "The calling agent should set 'temp:image_analysis_bytes_b64' and 'temp:image_analysis_question' in session state before invocation."
-        )
+        agent=image_analysis_agent
     )
     print(f"--- ImageAnalysisAgent wrapped as tool: {image_analysis_tool.name} ---")
 except Exception as e:

@@ -1,0 +1,38 @@
+2025-04-18 02:30:24,302 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: model='gpt-4o-mini' llm_client=<google.adk.models.lite_llm.LiteLLMClient object at 0x7cb04c77a950>
+2025-04-18 02:30:24,302 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 02:30:24,303 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 02:30:24,303 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 02:30:24,303 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 02:30:24,303 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 02:30:24,303 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 02:30:24,303 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 02:30:24,304 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 02:30:24,304 - AgentFlow - INFO - Session created: session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6 for user ml_user_main
+2025-04-18 02:30:24,304 - AgentFlow - INFO - SESSION=session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6: Initial query received.
+2025-04-18 02:30:24,304 - AgentFlow - INFO - SESSION=session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6: Invoking runner.run_async...
+2025-04-18 02:30:24,304 - AgentFlow - ERROR - SESSION=session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6: Unhandled error during runner execution:
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/main.py", line 282, in main
+    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/runners.py", line 197, in run_async
+    async for event in invocation_context.agent.run_async(invocation_context):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/agents/base_agent.py", line 136, in run_async
+    if event := self.__handle_before_agent_callback(ctx):
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/agents/base_agent.py", line 266, in __handle_before_agent_callback
+    ret_event = Event(
+                ^^^^^^
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/pydantic/main.py", line 253, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Event
+content
+  Input should be a valid dictionary or object to extract fields from [type=model_attributes_type, input_value=<coroutine object log_bef...agent at 0x7cb04c7b9540>, input_type=coroutine]
+    For further information visit https://errors.pydantic.dev/2.11/v/model_attributes_type
+2025-04-18 02:30:24,307 - AgentFlow - INFO - SESSION=session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6: Runner execution finished. Duration: 0.00 seconds.
+2025-04-18 02:30:24,308 - AgentFlow - INFO - SESSION=session_a6ed7d87-ab2a-4857-8dbb-b753c539f5c6: Final artifacts list: []

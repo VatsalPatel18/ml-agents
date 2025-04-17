@@ -168,9 +168,7 @@ async def main():
 
                 # --- Wrap the task agent as an AgentTool for the Orchestrator ---
                 agent_tool_wrapper = AgentTool(
-                    agent=agent,
-                    # Use description from agent definition (ensure it's set properly there)
-                    description=getattr(agent, 'description', f"Tool wrapper for {agent.name}")
+                    agent=agent
                 )
                 orchestrator_agent_tools.append(agent_tool_wrapper)
                 agent_flow_logger.info(f"AgentTool wrapper created for Orchestrator: {agent.name} -> {agent_tool_wrapper.name}")
@@ -251,27 +249,19 @@ async def main():
         print(f"CRITICAL ERROR: Failed to create session: {e}")
         return
 
-    # --- 8. Initial User Query (Simulated) ---
-    # Example query triggering a multi-step process
-    # Modify this query to test different scenarios
-    initial_query = """
-    Please analyze the dataset './my_data.csv'.
-    My goal is classification.
-    Handle missing values using median imputation and use standard scaling for preprocessing. Generate plots after preprocessing.
-    Train both a Logistic Regression (with C=0.5) and a RandomForestClassifier (n_estimators=50).
-    Evaluate both models using accuracy and F1 score.
-    Generate a confusion matrix plot for each model.
-    Finally, give me a report summarizing the process.
-    """
-    # Example: Preprocessing only
-    # initial_query = "Load './my_data.csv', preprocess it using mean imputation and standard scaling, and show me some plots."
-    # Example: Vague request
-    # initial_query = "Analyze './my_data.csv' and build a model."
-
-    print(f"\n>>> Simulating User Query:\n{initial_query}\n")
-    agent_flow_logger.info(f"SESSION={session_id}: Initial query received.")
-
-    # Prepare initial message content
+    # --- 8. Initial User Query (Interactive) ---
+    print("\nPlease describe your ML workflow request (e.g., load data, preprocess, train models, evaluate, report):")
+    try:
+        user_input = input("Your request: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nNo input provided. Exiting.")
+        return
+    if not user_input:
+        print("No request entered. Exiting.")
+        return
+    initial_query = user_input
+    agent_flow_logger.info(f"SESSION={session_id}: Initial user query: {initial_query}")
+    # Prepare initial message content for Orchestrator
     content = genai_types.Content(role='user', parts=[genai_types.Part(text=initial_query)])
 
     # --- 9. Run the Orchestrator Workflow ---

@@ -1,0 +1,42 @@
+2025-04-18 03:17:10,913 - AgentFlow - INFO - Initializing MLOrchestratorAgent with model: model='gemma4:3b' llm_client=<google.adk.models.lite_llm.LiteLLMClient object at 0x74e9bec549d0>
+2025-04-18 03:17:10,913 - AgentFlow - INFO - MLOrchestratorAgent initialized.
+2025-04-18 03:17:10,914 - AgentFlow - INFO - --- Starting ML Copilot ADK Application ---
+2025-04-18 03:17:10,914 - AgentFlow - INFO - Services initialized (InMemorySessionService, InMemoryArtifactService).
+2025-04-18 03:17:10,914 - AgentFlow - INFO - Core FunctionTools available: ['code_execution_tool', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool verified for: CodeGeneratorAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool verified for: ImageAnalysisAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: DataLoadingAgent -> DataLoadingAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: PreprocessingAgent -> PreprocessingAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: TrainingAgent -> TrainingAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: EvaluationAgent -> EvaluationAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - AgentTool wrapper created for Orchestrator: ReportingAgent -> ReportingAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - Tools and Callbacks assigned to MLOrchestratorAgent: ['DataLoadingAgent', 'PreprocessingAgent', 'TrainingAgent', 'EvaluationAgent', 'ReportingAgent', 'logging_tool', 'human_approval_tool']
+2025-04-18 03:17:10,914 - AgentFlow - INFO - Runner initialized with root agent: MLOrchestratorAgent
+2025-04-18 03:17:10,914 - AgentFlow - INFO - Session created: session_1c359fc6-9644-4d52-8e2f-4c99101eacc7 for user ml_user_main
+2025-04-18 03:17:31,839 - AgentFlow - INFO - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Initial user query: i would like to train a binary classification model
+2025-04-18 03:17:31,840 - AgentFlow - INFO - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Invoking runner.run_async...
+2025-04-18 03:17:31,840 - AgentFlow - INFO - INVOKE_ID=e-8746e576-c841-43bc-a16f-68ef8155b924: ---> Entering Agent 'MLOrchestratorAgent'
+2025-04-18 03:17:31,840 - AgentFlow - INFO - INVOKE_ID=e-8746e576-c841-43bc-a16f-68ef8155b924: ---> Entering MLOrchestratorAgent
+2025-04-18 03:17:31,840 - AgentFlow - ERROR - INVOKE_ID=e-8746e576-c841-43bc-a16f-68ef8155b924 (MLOrchestratorAgent): Failed to log via tool: 'InvocationContext' object has no attribute 'agent_name'
+2025-04-18 03:17:31,840 - AgentFlow - ERROR - Failed to parse initial query using LLM: LlmAgent._run_async_impl() got an unexpected keyword argument 'initial_user_content'
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/agents/orchestrator.py", line 180, in _run_async_impl
+    async for event in super(MLOrchestratorAgent, self)._run_async_impl(ctx, initial_user_content=genai_types.Content(parts=[genai_types.Part(text=parsing_prompt)])):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: LlmAgent._run_async_impl() got an unexpected keyword argument 'initial_user_content'
+2025-04-18 03:17:31,841 - AgentFlow - INFO - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Orchestrator yielded final event. Status: Error. Content snippet: MLOrchestratorAgent finished workflow execution with status: Failure. Error encountered: Sorry, I couldn't understand the initial request structure: LlmAgent._run_async_impl() got an unexpected keywor...
+2025-04-18 03:17:31,841 - AgentFlow - ERROR - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Unhandled error during runner execution:
+Traceback (most recent call last):
+  File "/home/vatsal-patel/Documents/github/ml2/main.py", line 274, in main
+    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/runners.py", line 197, in run_async
+    async for event in invocation_context.agent.run_async(invocation_context):
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/agents/base_agent.py", line 147, in run_async
+    if event := self.__handle_after_agent_callback(ctx):
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vatsal-patel/myenv/lib/python3.11/site-packages/google/adk/agents/base_agent.py", line 300, in __handle_after_agent_callback
+    after_agent_callback_content = self.after_agent_callback(
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: log_after_agent() missing 1 required positional argument: 'result'
+2025-04-18 03:17:31,841 - AgentFlow - INFO - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Runner execution finished. Duration: 0.00 seconds.
+2025-04-18 03:17:31,842 - AgentFlow - INFO - SESSION=session_1c359fc6-9644-4d52-8e2f-4c99101eacc7: Final artifacts list: []

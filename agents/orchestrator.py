@@ -5,6 +5,7 @@ import uuid
 import time
 import asyncio # Added for sleep
 from typing import Optional, Dict, Any, AsyncGenerator, List
+from pydantic import Field
 
 from google.adk.agents import LlmAgent, BaseAgent # Added BaseAgent for type hint
 from google.adk.tools import agent_tool # Correct way to import AgentTool module
@@ -50,6 +51,8 @@ else:
 
 # --- Agent Definition ---
 class MLOrchestratorAgent(LlmAgent):
+    # Mapping of tool names to AgentTool instances (initialized in __init__)
+    tools_map: Dict[str, agent_tool.AgentTool] = Field(default_factory=dict)
 
     def __init__(self, **kwargs):
         # Determine model configuration
@@ -72,17 +75,17 @@ class MLOrchestratorAgent(LlmAgent):
         for agent_instance in task_agent_instances:
             if agent_instance:
                 try:
+                    # Wrap the agent as an AgentTool for orchestrator invocation
                     tool_wrapper = agent_tool.AgentTool(
-                        agent=agent_instance,
-                        description=getattr(agent_instance, 'description', f"Tool wrapper for {agent_instance.name}")
+                        agent=agent_instance
                     )
                     orchestrator_tools.append(tool_wrapper)
-                    task_agent_tools_map_temp[agent_instance.name] = tool_wrapper # Store temporarily
+                    task_agent_tools_map_temp[agent_instance.name] = tool_wrapper
                     agent_flow_logger.debug(f"Orchestrator prepared AgentTool for: {agent_instance.name}")
                 except Exception as e:
                     agent_flow_logger.error(f"Failed to create AgentTool for {agent_instance.name} in Orchestrator: {e}", exc_info=True)
             else:
-                 agent_flow_logger.error(f"Agent instance {type(agent_instance)} is None, cannot create AgentTool.") # Log type if possible
+                agent_flow_logger.error(f"Agent instance {type(agent_instance)} is None, cannot create AgentTool.")
 
         # Add core tools needed directly by the orchestrator
         if logging_tool:
@@ -157,67 +160,67 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
 
         agent_flow_logger.info(f"INVOKE_ID={ctx.invocation_id}: ---> Entering {self.name}")
 
-        # --- Initial Goal Understanding (if first run) ---
+        # --- Initial Goal Understanding (Interactive) ---
         if ctx.session.state.get("current_step") is None:
-            initial_query = ""
-            if ctx.user_content and ctx.user_content.parts:
-                initial_query = ctx.user_content.parts[0].text or ""
-            await self._log(f"Received initial user query: {initial_query[:500]}...", ctx, logging_tool_func)
-
-            parsing_prompt = f"""
-Parse the following user request for an ML task... (same parsing prompt as before)
-
-User Request:
-"{initial_query}"
-
-JSON Output:
-"""
-            initial_state_delta = {}
-            try:
-                async for event in super(MLOrchestratorAgent, self)._run_async_impl(ctx, initial_user_content=genai_types.Content(parts=[genai_types.Part(text=parsing_prompt)])):
-                    if event.is_final_response() and event.content and event.content.parts:
-                        parsed_json_str = event.content.parts[0].text
-                        parsed_json_str = parsed_json_str.strip().removeprefix("```json").removesuffix("```").strip()
-                        agent_flow_logger.info(f"LLM parsing result: {parsed_json_str}")
-                        parsed_state = json.loads(parsed_json_str)
-
-                        initial_state_delta["user_goal"] = parsed_state.get("user_goal", initial_query)
-                        initial_state_delta["task"] = parsed_state.get("task", "classification")
-                        initial_state_delta["workflow_plan"] = parsed_state.get("workflow_plan", ['load', 'preprocess', 'train', 'evaluate', 'report', 'done'])
-                        initial_state_delta["datasets"] = parsed_state.get("datasets", {})
-                        models_to_train_list = parsed_state.get("models_to_train", [])
-                        if initial_state_delta["datasets"]:
-                            first_dataset_id = list(initial_state_delta["datasets"].keys())[0]
-                            initial_state_delta["datasets"][first_dataset_id]["models_to_train"] = models_to_train_list
-                            for ds_id in initial_state_delta["datasets"]:
-                                if "plots" not in initial_state_delta["datasets"][ds_id]: initial_state_delta["datasets"][ds_id]["plots"] = []
-                                if "analysis" not in initial_state_delta["datasets"][ds_id]: initial_state_delta["datasets"][ds_id]["analysis"] = {}
-                                if "preprocess_strategy" not in initial_state_delta["datasets"][ds_id]: initial_state_delta["datasets"][ds_id]["preprocess_strategy"] = {}
-                            initial_state_delta["current_dataset_id"] = first_dataset_id
-                        else:
-                             agent_flow_logger.error("LLM failed to parse dataset information.")
-                             yield self._create_final_event(ctx, "Failure", "Could not identify the dataset from your request.")
-                             return
-
-                        initial_state_delta["models"] = {}
-                        initial_state_delta["evaluate_models"] = []
-                        initial_state_delta["report_config"] = {"dataset_ids": list(initial_state_delta["datasets"].keys())}
-                        initial_state_delta["current_step"] = initial_state_delta["workflow_plan"][0] if initial_state_delta["workflow_plan"] else "done"
-
-                        await self._log(f"Initialized state from LLM parsing. Plan: {initial_state_delta['workflow_plan']}. Starting step: {initial_state_delta['current_step']}", ctx, logging_tool_func)
-                        break
-                if not initial_state_delta:
-                     raise ValueError("LLM parsing failed to produce state.")
-
-            except Exception as e:
-                agent_flow_logger.error(f"Failed to parse initial query using LLM: {e}", exc_info=True)
-                yield self._create_final_event(ctx, "Failure", f"Sorry, I couldn't understand the initial request structure: {e}")
+            # Interactive setup: ask user for core workflow parameters
+            print("\n--- ML Workflow Setup ---")
+            dataset_path = input("Dataset path (e.g., ./my_data.csv): ").strip()
+            if not dataset_path:
+                print("No dataset path provided. Exiting.")
                 return
-
+            task_type = input("Task type (classification/regression) [classification]: ").strip() or "classification"
+            if task_type.lower() == "classification":
+                class_type = input("Classification type (binary/multiclass) [binary]: ").strip() or "binary"
+                task_type = f"{task_type}-{class_type}"
+            # Default workflow steps
+            workflow_plan = ["load", "preprocess", "train", "evaluate", "report", "done"]
+            # Build initial dataset and model configs
+            models_to_train: List[Dict[str, Any]] = []
+            print("Enter models to train (e.g., LogisticRegression). Leave blank to finish.")
+            while True:
+                model_name = input("Model type: ").strip()
+                if not model_name:
+                    break
+                params_text = input("Model params as JSON (e.g., {\"C\":1.0}): ").strip() or "{}"
+                try:
+                    model_params = json.loads(params_text)
+                except Exception:
+                    print("Invalid JSON. Using empty params.")
+                    model_params = {}
+                models_to_train.append({"type": model_name, "params": model_params, "model_base_id": model_name})
+            if not models_to_train:
+                print("No models specified. Exiting.")
+                return
+            # Assemble state delta
+            state_delta: Dict[str, Any] = {
+                "user_goal": f"Train {task_type} model(s)",
+                "task": task_type,
+                "workflow_plan": workflow_plan,
+                "datasets": {
+                    "d1": {
+                        "path": dataset_path,
+                        "target_column": "target",
+                        "models_to_train": models_to_train,
+                        "plots": [],
+                        "analysis": {},
+                        "preprocess_strategy": {}
+                    }
+                },
+                "current_dataset_id": "d1",
+                "current_step": "load",
+                "models": {},
+                "evaluate_models": [],
+                "report_config": {"dataset_ids": ["d1"]}
+            }
+            # Log and yield initial planning event
+            await self._log(
+                f"Interactive setup complete. Starting workflow with plan {workflow_plan}.",
+                ctx, logging_tool_func
+            )
             yield Event(
                 author=self.name, invocation_id=ctx.invocation_id,
-                content=genai_types.Content(parts=[genai_types.Part(text=f"Okay, planning workflow for task '{initial_state_delta['task']}'. Starting step: '{initial_state_delta['current_step']}'.")]),
-                actions=EventActions(state_delta=initial_state_delta)
+                content=genai_types.Content(parts=[genai_types.Part(text=f"Starting workflow: {workflow_plan}" )]),
+                actions=EventActions(state_delta=state_delta)
             )
             await asyncio.sleep(0.1)
 
@@ -302,31 +305,27 @@ JSON Output:
             if target_agent_tool and isinstance(target_agent_tool, agent_tool.AgentTool): # Check it's an AgentTool
                 await self._log(f"Invoking {target_agent_name} tool for step '{current_step}'...", ctx, logging_tool_func)
                 try:
-                    step_input_content = genai_types.Content(parts=[genai_types.Part(text=f"Execute step: {current_step} for dataset {current_dataset_id}")])
-                    step_final_event = None
-
-                    async for event in target_agent_tool.run_async(ctx, user_content=step_input_content):
-                        if event.is_final_response():
-                            step_final_event = event
-                            break
-
-                    if step_final_event:
-                        agent_name = step_final_event.author
-                        final_content = step_final_event.content.parts[0].text if step_final_event.content and step_final_event.content.parts else "No content"
-                        await self._log(f"Received final response from {agent_name}: {final_content[:200]}...", ctx, logging_tool_func)
-                        if step_final_event.error_message:
-                            step_success = False
-                            step_error_message = f"Step '{current_step}' ({agent_name}) failed: {step_final_event.error_message}"
-                        else:
-                            step_success = True
-                    else:
-                         step_success = False
-                         step_error_message = f"Step '{current_step}' ({target_agent_name}) did not return a final event."
-
+                    # Prepare ToolContext for specialist agent call
+                    from google.adk.tools.tool_context import ToolContext
+                    tool_ctx = ToolContext(ctx)
+                    # Call the specialist agent tool
+                    tool_input = {"request": f"Execute step: {current_step} for dataset {current_dataset_id}"}
+                    tool_result = await target_agent_tool.run_async(
+                        args=tool_input,
+                        tool_context=tool_ctx,
+                    )
+                    await self._log(
+                        f"{target_agent_name} result: {tool_result}",
+                        ctx,
+                        logging_tool_func,
+                    )
+                    step_success = True
+                    step_error_message = None
                 except Exception as e:
                     step_success = False
                     step_error_message = f"Error invoking {target_agent_name}: {e}"
-                    agent_flow_logger.exception(f"INVOKE_ID={ctx.invocation_id}: Unhandled error invoking {target_agent_name}")
+
+                # No additional error handling needed here
 
             else:
                 step_success = False
@@ -406,13 +405,15 @@ JSON Output:
         message = final_message or f"{self.name} finished workflow execution with status: {status}."
         if error_msg and status != "Success":
             message += f" Error encountered: {error_msg}"
+        # Always supply an EventActions instance (avoid passing None)
+        actions_obj = EventActions(state_delta=state_delta or {})
         return Event(
             author=self.name,
             invocation_id=ctx.invocation_id,
             content=genai_types.Content(parts=[genai_types.Part(text=message)]),
-            actions=EventActions(state_delta=state_delta) if state_delta else None,
+            actions=actions_obj,
             turn_complete=True,
-            error_message=error_msg if status != "Success" else None
+            error_message=error_msg if status != "Success" else None,
         )
 
 # --- Instantiate the Agent ---

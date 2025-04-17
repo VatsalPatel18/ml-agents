@@ -11,7 +11,7 @@ from google.genai import types as genai_types
 from placeholders import read_local_file_bytes, get_mime_type
 from config import ARTIFACT_PREFIX, tool_calls_logger # Use shared prefix
 
-async def save_plot_artifact(
+def save_plot_artifact(
     plot_local_path: str,
     logical_plot_name: str, # e.g., "confusion_matrix_lr_d1"
     tool_context: ToolContext

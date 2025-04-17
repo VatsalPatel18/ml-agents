@@ -7458,3 +7458,467 @@ This will only run eval_1, eval_2 and eval_3 from sample_eval_set_file.json
 CONFIG_FILE_PATH: The path to the config file.
 PRINT_DETAILED_RESULTS: Prints detailed results on the console.
  Back to top
+ 
+ 
+ 
+ Install Vertex AI SDK¶
+Agent Engine is part of the Vertex AI SDK for Python. For more information, you can review the Agent Engine quickstart documentation.
+
+Install the Vertex AI SDK¶
+
+pip install google-cloud-aiplatform[adk,agent_engines]
+Info
+
+Agent Engine only supported Python version >=3.9 and <=3.12.
+
+Initialization¶
+
+import vertexai
+
+PROJECT_ID = "your-project-id"
+LOCATION = "us-central1"
+STAGING_BUCKET = "gs://your-google-cloud-storage-bucket"
+
+vertexai.init(
+    project=PROJECT_ID,
+    location=LOCATION,
+    staging_bucket=STAGING_BUCKET,
+)
+For LOCATION, you can check out the list of supported regions in Agent Engine.
+
+Create your agent¶
+You can use the sample agent below, which has two tools (to get weather or retrieve the time in a specified city):
+
+
+import datetime
+from zoneinfo import ZoneInfo
+from google.adk.agents import Agent
+
+def get_weather(city: str) -> dict:
+    """Retrieves the current weather report for a specified city.
+
+    Args:
+        city (str): The name of the city for which to retrieve the weather report.
+
+    Returns:
+        dict: status and result or error msg.
+    """
+    if city.lower() == "new york":
+        return {
+            "status": "success",
+            "report": (
+                "The weather in New York is sunny with a temperature of 25 degrees"
+                " Celsius (41 degrees Fahrenheit)."
+            ),
+        }
+    else:
+        return {
+            "status": "error",
+            "error_message": f"Weather information for '{city}' is not available.",
+        }
+
+
+def get_current_time(city: str) -> dict:
+    """Returns the current time in a specified city.
+
+    Args:
+        city (str): The name of the city for which to retrieve the current time.
+
+    Returns:
+        dict: status and result or error msg.
+    """
+
+    if city.lower() == "new york":
+        tz_identifier = "America/New_York"
+    else:
+        return {
+            "status": "error",
+            "error_message": (
+                f"Sorry, I don't have timezone information for {city}."
+            ),
+        }
+
+    tz = ZoneInfo(tz_identifier)
+    now = datetime.datetime.now(tz)
+    report = (
+        f'The current time in {city} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}'
+    )
+    return {"status": "success", "report": report}
+
+
+root_agent = Agent(
+    name="weather_time_agent",
+    model="gemini-2.0-flash",
+    description=(
+        "Agent to answer questions about the time and weather in a city."
+    ),
+    instruction=(
+        "You are a helpful agent who can answer user questions about the time and weather in a city."
+    ),
+    tools=[get_weather, get_current_time],
+)
+Prepare your agent for Agent Engine¶
+Use reasoning_engines.AdkApp() to wrap your agent to make it deployable to Agent Engine
+
+
+from vertexai.preview import reasoning_engines
+
+app = reasoning_engines.AdkApp(
+    agent=root_agent,
+    enable_tracing=True,
+)
+Try your agent locally¶
+You can try it locally before deploying to Agent Engine.
+
+Create session (local)¶
+
+session = app.create_session(user_id="u_123")
+session
+Expected output for create_session (local):
+
+
+Session(id='c6a33dae-26ef-410c-9135-b434a528291f', app_name='default-app-name', user_id='u_123', state={}, events=[], last_update_time=1743440392.8689594)
+List sessions (local)¶
+
+app.list_sessions(user_id="u_123")
+Expected output for list_sessions (local):
+
+
+ListSessionsResponse(session_ids=['c6a33dae-26ef-410c-9135-b434a528291f'])
+Get a specific session (local)¶
+
+session = app.get_session(user_id="u_123", session_id=session.id)
+session
+Expected output for get_session (local):
+
+
+Session(id='c6a33dae-26ef-410c-9135-b434a528291f', app_name='default-app-name', user_id='u_123', state={}, events=[], last_update_time=1743681991.95696)
+Send queries to your agent (local)¶
+
+for event in app.stream_query(
+    user_id="u_123",
+    session_id=session.id,
+    message="whats the weather in new york",
+):
+print(event)
+Expected output for stream_query (local):
+
+
+{'parts': [{'function_call': {'id': 'af-a33fedb0-29e6-4d0c-9eb3-00c402969395', 'args': {'city': 'new york'}, 'name': 'get_weather'}}], 'role': 'model'}
+{'parts': [{'function_response': {'id': 'af-a33fedb0-29e6-4d0c-9eb3-00c402969395', 'name': 'get_weather', 'response': {'status': 'success', 'report': 'The weather in New York is sunny with a temperature of 25 degrees Celsius (41 degrees Fahrenheit).'}}}], 'role': 'user'}
+{'parts': [{'text': 'The weather in New York is sunny with a temperature of 25 degrees Celsius (41 degrees Fahrenheit).'}], 'role': 'model'}
+Deploy your agent to Agent Engine¶
+
+from vertexai import agent_engines
+
+remote_app = agent_engines.create(
+    agent_engine=root_agent,
+    requirements=[
+        "google-cloud-aiplatform[adk,agent_engines]"   
+    ]
+)
+This step may take several minutes to finish.
+
+Grant the deployed agent permissions¶
+Before proceeding to query your agent on Agent Engine, your deployed agent must first be granted additional permissions before it can use managed sessions. Managed sessions are a built-in component of Agent Engine that enables agents to keep track of the state of a conversation. Without granting the deploy agent the permissions below, you may see errors when querying your deployed agent.
+
+You can follow the instructions in Set up your service agent permissions to grant the following permissions via the IAM admin page:
+
+Vertex AI User (roles/aiplatform.user) to your service-PROJECT_NUMBER@gcp-sa-aiplatform-re.iam.gserviceaccount.com service account
+Try your agent on Agent Engine¶
+Create session (remote)¶
+
+remote_session = remote_app.create_session(user_id="u_456")
+remote_session
+Expected output for create_session (remote):
+
+
+{'events': [],
+'user_id': 'u_456',
+'state': {},
+'id': '7543472750996750336',
+'app_name': '7917477678498709504',
+'last_update_time': 1743683353.030133}
+id is the session ID, and app_name is the resource ID of the deployed agent on Agent Engine.
+
+List sessions (remote)¶
+
+remote_app.list_sessions(user_id="u_456")
+Get a specific session (remote)¶
+
+remote_app.get_session(user_id="u_456", session_id=remote_session["id"])
+Note
+
+While using your agent locally, session ID is stored in session.id, when using your agent remotely on Agent Engine, session ID is stored in remote_session["id"].
+
+Send queries to your agent (remote)¶
+
+for event in remote_app.stream_query(
+    user_id="u_456",
+    session_id=remote_session["id"],
+    message="whats the weather in new york",
+):
+    print(event)
+Expected output for stream_query (remote):
+
+
+{'parts': [{'function_call': {'id': 'af-f1906423-a531-4ecf-a1ef-723b05e85321', 'args': {'city': 'new york'}, 'name': 'get_weather'}}], 'role': 'model'}
+{'parts': [{'function_response': {'id': 'af-f1906423-a531-4ecf-a1ef-723b05e85321', 'name': 'get_weather', 'response': {'status': 'success', 'report': 'The weather in New York is sunny with a temperature of 25 degrees Celsius (41 degrees Fahrenheit).'}}}], 'role': 'user'}
+{'parts': [{'text': 'The weather in New York is sunny with a temperature of 25 degrees Celsius (41 degrees Fahrenheit).'}], 'role': 'model'}
+Clean up¶
+After you've finished, it's a good practice to clean up your cloud resources. You can delete the deployed Agent Engine instance to avoid any unexpected charges on your Google Cloud account.
+
+
+remote_app.delete(force=True)
+force=True will also delete any child resources that were generated from the deployed agent, such as sessions.
+
+
+Using Cloud & Proprietary Models via LiteLLM¶
+To access a vast range of LLMs from providers like OpenAI, Anthropic (non-Vertex AI), Cohere, and many others, ADK offers integration through the LiteLLM library.
+
+Integration Method: Instantiate the LiteLlm wrapper class and pass it to the model parameter of LlmAgent.
+
+LiteLLM Overview: LiteLLM acts as a translation layer, providing a standardized, OpenAI-compatible interface to over 100+ LLMs.
+
+Setup:
+
+Install LiteLLM:
+
+pip install litellm
+Set Provider API Keys: Configure API keys as environment variables for the specific providers you intend to use.
+
+Example for OpenAI:
+
+
+export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+Example for Anthropic (non-Vertex AI):
+
+
+export ANTHROPIC_API_KEY="YOUR_ANTHROPIC_API_KEY"
+Consult the LiteLLM Providers Documentation for the correct environment variable names for other providers.
+
+Example:
+
+
+from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
+
+# --- Example Agent using OpenAI's GPT-4o ---
+# (Requires OPENAI_API_KEY)
+agent_openai = LlmAgent(
+    model=LiteLlm(model="openai/gpt-4o"), # LiteLLM model string format
+    name="openai_agent",
+    instruction="You are a helpful assistant powered by GPT-4o.",
+    # ... other agent parameters
+)
+
+# --- Example Agent using Anthropic's Claude Haiku (non-Vertex) ---
+# (Requires ANTHROPIC_API_KEY)
+agent_claude_direct = LlmAgent(
+    model=LiteLlm(model="anthropic/claude-3-haiku-20240307"),
+    name="claude_direct_agent",
+    instruction="You are an assistant powered by Claude Haiku.",
+    # ... other agent parameters
+)
+Using Open & Local Models via LiteLLM¶
+For maximum control, cost savings, privacy, or offline use cases, you can run open-source models locally or self-host them and integrate them using LiteLLM.
+
+Integration Method: Instantiate the LiteLlm wrapper class, configured to point to your local model server.
+
+Ollama Integration¶
+Ollama allows you to easily run open-source models locally.
+
+Model choice¶
+If your agent is relying on tools, please make sure that you select a model with tool support from Ollama website.
+
+For reliable results, we recommend using a decent-sized model with tool support.
+
+The tool support for the model can be checked with the following command:
+
+
+ollama show mistral-small3.1
+  Model
+    architecture        mistral3
+    parameters          24.0B
+    context length      131072
+    embedding length    5120
+    quantization        Q4_K_M
+
+  Capabilities
+    completion
+    vision
+    tools
+You are supposed to see tools listed under capabilities.
+
+You can also look at the template the model is using and tweak it based on your needs.
+
+
+ollama show --modelfile llama3.2 > model_file_to_modify
+For instance, the default template for the above model inherently suggests that the model shall call a function all the time. This may result in an infinite loop of function calls.
+
+
+Given the following functions, please respond with a JSON for a function call
+with its proper arguments that best answers the given prompt.
+
+Respond in the format {"name": function name, "parameters": dictionary of
+argument name and its value}. Do not use variables.
+You can swap such prompts with a more descriptive one to prevent infinite tool call loops.
+
+For instance:
+
+
+Review the user's prompt and the available functions listed below.
+First, determine if calling one of these functions is the most appropriate way to respond. A function call is likely needed if the prompt asks for a specific action, requires external data lookup, or involves calculations handled by the functions. If the prompt is a general question or can be answered directly, a function call is likely NOT needed.
+
+If you determine a function call IS required: Respond ONLY with a JSON object in the format {"name": "function_name", "parameters": {"argument_name": "value"}}. Ensure parameter values are concrete, not variables.
+
+If you determine a function call IS NOT required: Respond directly to the user's prompt in plain text, providing the answer or information requested. Do not output any JSON.
+Then you can create a new model with the following command:
+
+
+ollama create llama3.2-modified -f model_file_to_modify
+Using ollama_chat provider¶
+Our LiteLLM wrapper can be used to create agents with Ollama models.
+
+
+root_agent = Agent(
+    model=LiteLlm(model="ollama_chat/mistral-small3.1"),
+    name="dice_agent",
+    description=(
+        "hello world agent that can roll a dice of 8 sides and check prime"
+        " numbers."
+    ),
+    instruction="""
+      You roll dice and answer questions about the outcome of the dice rolls.
+    """,
+    tools=[
+        roll_die,
+        check_prime,
+    ],
+)
+It is important to set the provider ollama_chat instead of ollama. Using ollama will result in unexpected behaviors such as infinite tool call loops and ignoring previous context.
+
+While api_base can be provided inside LiteLLM for generation, LiteLLM library is calling other APIs relying on the env variable instead as of v1.65.5 after completion. So at this time, we recommend setting the env variable OLLAMA_API_BASE to point to the ollama server.
+
+
+export OLLAMA_API_BASE="http://localhost:11434"
+adk web
+Using openai provider¶
+Alternatively, openai can be used as the provider name. But this will also require setting the OPENAI_API_BASE=http://localhost:11434/v1 and OPENAI_API_KEY=anything env variables instead of OLLAMA_API_BASE. Please note that api base now has /v1 at the end.
+
+
+root_agent = Agent(
+    model=LiteLlm(model="openai/mistral-small3.1"),
+    name="dice_agent",
+    description=(
+        "hello world agent that can roll a dice of 8 sides and check prime"
+        " numbers."
+    ),
+    instruction="""
+      You roll dice and answer questions about the outcome of the dice rolls.
+    """,
+    tools=[
+        roll_die,
+        check_prime,
+    ],
+)
+
+export OPENAI_API_BASE=http://localhost:11434/v1
+export OPENAI_API_KEY=anything
+adk web
+Debugging¶
+You can see the request sent to the Ollama server by adding the following in your agent code just after imports.
+
+
+import litellm
+litellm._turn_on_debug()
+Look for a line like the following:
+
+
+Request Sent from LiteLLM:
+curl -X POST \
+http://localhost:11434/api/chat \
+-d '{'model': 'mistral-small3.1', 'messages': [{'role': 'system', 'content': ...
+
+
+Testing your agent¶
+Once your agent is deployed to Cloud Run, you can interact with it via the deployed UI (if enabled) or directly with its API endpoints using tools like curl. You'll need the service URL provided after deployment.
+
+
+UI Testing
+API Testing (curl)
+UI Testing¶
+If you deployed your agent with the UI enabled:
+
+adk CLI: You included the --with_ui flag during deployment.
+gcloud CLI: You set SERVE_WEB_INTERFACE = True in your main.py.
+You can test your agent by simply navigating to the Cloud Run service URL provided after deployment in your web browser.
+
+
+# Example URL format
+# https://your-service-name-abc123xyz.a.run.app
+The ADK dev UI allows you to interact with your agent, manage sessions, and view execution details directly in the browser.
+
+To verify your agent is working as intended, you can:
+
+Select your agent from the dropdown menu.
+Type a message and verify that you receive an expected response from your agent.
+If you experience any unexpected behavior, check the Cloud Run console logs.
+
+API Testing (curl)¶
+You can interact with the agent's API endpoints using tools like curl. This is useful for programmatic interaction or if you deployed without the UI.
+
+You'll need the service URL provided after deployment and potentially an identity token for authentication if your service isn't set to allow unauthenticated access.
+
+Set the application URL¶
+Replace the example URL with the actual URL of your deployed Cloud Run service.
+
+
+export APP_URL="YOUR_CLOUD_RUN_SERVICE_URL"
+# Example: export APP_URL="https://adk-default-service-name-abc123xyz.a.run.app"
+Get an identity token (if needed)¶
+If your service requires authentication (i.e., you didn't use --allow-unauthenticated with gcloud or answered 'N' to the prompt with adk), obtain an identity token.
+
+
+export TOKEN=$(gcloud auth print-identity-token)
+If your service allows unauthenticated access, you can omit the -H "Authorization: Bearer $TOKEN" header from the curl commands below.
+
+List available apps¶
+Verify the deployed application name.
+
+
+curl -X GET -H "Authorization: Bearer $TOKEN" $APP_URL/list-apps
+(Adjust the app_name in the following commands based on this output if needed. The default is often the agent directory name, e.g., capital_agent).
+
+Create or Update a Session¶
+Initialize or update the state for a specific user and session. Replace capital_agent with your actual app name if different. The values user_123 and session_abc are example identifiers; you can replace them with your desired user and session IDs.
+
+
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    $APP_URL/apps/capital_agent/users/user_123/sessions/session_abc \
+    -H "Content-Type: application/json" \
+    -d '{"state": {"preferred_language": "English", "visit_count": 5}}'
+Run the Agent¶
+Send a prompt to your agent. Replace capital_agent with your app name and adjust the user/session IDs and prompt as needed.
+
+
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    $APP_URL/run_sse \
+    -H "Content-Type: application/json" \
+    -d '{
+    "app_name": "capital_agent",
+    "user_id": "user_123",
+    "session_id": "session_abc",
+    "new_message": {
+        "role": "user",
+        "parts": [{
+        "text": "What is the capital of Canada?"
+        }]
+    },
+    "streaming": false
+    }'
+Set "streaming": true if you want to receive Server-Sent Events (SSE).
+The response will contain the agent's execution events, including the final answer.
+
+
+
