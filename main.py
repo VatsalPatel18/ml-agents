@@ -1,4 +1,45 @@
 # main.py
+# Allow selecting model provider and API key via CLI before loading config
+import argparse, os, sys
+parser = argparse.ArgumentParser(description="Run the ML Copilot ADK application.")
+parser.add_argument("--provider", choices=["google", "openai", "ollama"],
+                    help="Primary model provider to use (overrides PRIMARY_PROVIDER env var).")
+parser.add_argument("--api-key", dest="api_key",
+                    help="API key for the selected provider (sets GOOGLE_API_KEY or OPENAI_API_KEY).")
+parser.add_argument("--openai-api-base", dest="openai_api_base",
+                    help="Custom OpenAI API base URL (sets OPENAI_API_BASE env var).")
+parser.add_argument("--ollama-api-base", dest="ollama_api_base",
+                    help="Ollama API base URL (sets OLLAMA_API_BASE env var).")
+parser.add_argument("--google-model", dest="google_model",
+                    help="Override default Google model ID (sets GOOGLE_DEFAULT_MODEL env var).")
+parser.add_argument("--openai-model", dest="openai_model",
+                    help="Override default OpenAI model ID (sets OPENAI_DEFAULT_MODEL env var).")
+parser.add_argument("--ollama-model", dest="ollama_model",
+                    help="Override default Ollama model ID (sets OLLAMA_DEFAULT_MODEL env var).")
+args, _unknown = parser.parse_known_args()
+if args.provider:
+    os.environ["PRIMARY_PROVIDER"] = args.provider
+if args.api_key:
+    # Assign API key to the appropriate env var
+    prov = os.environ.get("PRIMARY_PROVIDER", "google").lower()
+    if prov == "google":
+        os.environ["GOOGLE_API_KEY"] = args.api_key
+    elif prov == "openai":
+        os.environ["OPENAI_API_KEY"] = args.api_key
+    # Ollama does not use API key
+if args.openai_api_base:
+    os.environ["OPENAI_API_BASE"] = args.openai_api_base
+if args.ollama_api_base:
+    os.environ["OLLAMA_API_BASE"] = args.ollama_api_base
+if args.google_model:
+    os.environ["GOOGLE_DEFAULT_MODEL"] = args.google_model
+    os.environ["GOOGLE_IMAGE_ANALYSIS_MODEL"] = args.google_model
+if args.openai_model:
+    os.environ["OPENAI_DEFAULT_MODEL"] = args.openai_model
+    os.environ["OPENAI_IMAGE_ANALYSIS_MODEL"] = args.openai_model
+if args.ollama_model:
+    os.environ["OLLAMA_DEFAULT_MODEL"] = args.ollama_model
+
 import asyncio
 import os
 import shutil

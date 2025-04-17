@@ -1,97 +1,107 @@
-# Machine Learning Agent Swarm
+ # ML Copilot ADK
 
-## Overview
+ An agent‑based system using the Google Agent Development Kit (ADK) to automate end‑to‑end machine learning workflows, from data loading and preprocessing through model training, evaluation, image analysis, and reporting.
 
-This project implements a sophisticated, agent-based system designed to automate various machine learning workflows. It utilizes a swarm of specialized agents, coordinated by a central orchestrator, to handle tasks ranging from data loading and preprocessing to model training, evaluation, and reporting. The system dynamically generates and executes necessary code, making it flexible and adaptable to different ML goals.
+ ## Features
 
-## Features
+ - **Agent‑Orchestrator Architecture** powered by ADK  
+ - **Dynamic Code Generation** via LLM (`CodeGeneratorAgent`)  
+ - **Secure (Toggleable) Code Execution** with `code_execution_tool`  
+ - **In‑Memory State Management**, artifact storage, and session tracking  
+ - **Image Analysis Agent** (placeholder for multimodal LLM)  
+ - **Modular Task Agents**: DataLoading, Preprocessing, Training, Evaluation, ImageAnalysis, Reporting  
+ - **Human‑in‑the‑Loop** and **Structured Logging** support  
 
-*   **Agent-Based Architecture:** Modular design with specialized agents for distinct ML tasks.
-*   **Dynamic Workflow Orchestration:** An `MLOrchestratorAgent` interprets user goals and plans the execution sequence.
-*   **Automated Code Generation:** A dedicated `CodeGeneratorAgent` writes Python code for ML operations (using libraries like Pandas, Scikit-learn, etc.).
-*   **Code Execution & Error Handling:** Executes generated code securely and manages potential errors.
-*   **State Management:** Tracks datasets, models, metrics, and workflow progress.
-*   **Artifact Handling:** Manages outputs like plots, reports, and intermediate data.
-*   **Task Specialization:** Agents dedicated to Data Loading, Preprocessing, Training, Evaluation, Visualization, Image Analysis, and Reporting.
+ ## Prerequisites
 
-## Architecture
+ - Python 3.9+ (3.10+ recommended)  
+ - Git  
+ - (Optional) Docker or other sandbox if you later lock down code execution  
+ - pip dependencies (see `requirements.txt`)
 
-The system follows a hierarchical agent structure:
+ ## Setup
 
-1.  **MLOrchestratorAgent:** The top-level agent that interacts with the user, understands the overall goal, plans the workflow dynamically, and delegates tasks to specialized agents.
-2.  **CodeGeneratorAgent:** A specialized LLM agent responsible solely for generating Python code based on detailed prompts from other agents.
-3.  **Task-Specific Agents:**
-    *   `DataLoadingAgent`: Handles loading datasets.
-    *   `PreprocessingAgent`: Performs data cleaning, transformation, and feature engineering.
-    *   `TrainingAgent`: Trains specified machine learning models.
-    *   `EvaluationAgent`: Evaluates trained models using various metrics.
-    *   `ImageAnalysisAgent`: Interprets image artifacts (like plots) using multimodal capabilities.
-    *   `ReportingAgent`: Synthesizes results and generates final reports.
-4.  **Core Tools:**
-    *   `CodeExecutionTool`: Executes the generated Python code in a controlled environment.
-    *   `VisualizationTool`: Generates plots and saves them as artifacts.
-    *   `LoggingTool`: Provides structured logging capabilities.
-
-*(Note: This architecture likely relies on the Google Agent Development Kit - ADK)*
-
-## Getting Started
-
-### Prerequisites
-
-*   Python (specify version, e.g., 3.10+)
-*   Required Python packages (see `requirements.txt`)
-*   (Potentially) Access keys or configuration for specific LLMs or cloud services used by the agents.
-
-### Installation
-
-1.  **Clone the repository:**
+ 1. **Clone & enter the repo**  
     ```bash
-    git clone <your-repo-url>
-    cd <your-repo-name>
+    git clone <your‑repo‑url>
+    cd <your‑repo‑dir>
     ```
-2.  **Set up a virtual environment (recommended):**
+ 2. **(Optional) Create a virtual environment**  
     ```bash
     python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    source venv/bin/activate     # Windows: venv\Scripts\activate
     ```
-3.  **Install dependencies:**
+ 3. **Install Python dependencies**  
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Configuration:**
-    *   Update `config.py` or relevant configuration files with necessary API keys, paths, or settings. (Add more specific instructions here if needed).
+ 4. **Configure credentials & models**  
+    You can either set environment variables, or pass them as CLI flags to `main.py` (see next section):
+    - `PRIMARY_PROVIDER` = `google` | `openai` | `ollama` (default: `google`)  
+    - `GOOGLE_API_KEY`, `OPENAI_API_KEY`  
+    - `OPENAI_API_BASE`, `OLLAMA_API_BASE` (for custom endpoints)  
+    - `GOOGLE_DEFAULT_MODEL`, `OPENAI_DEFAULT_MODEL`, `OLLAMA_DEFAULT_MODEL`  
+    - `GOOGLE_IMAGE_ANALYSIS_MODEL` (for the multimodal agent)  
+    - Toggle insecure execution in `config.py` via `ALLOW_INSECURE_CODE_EXECUTION`
 
-### Running the System
+ ## Running
 
-Execute the main entry point script:
+ ### 1) Quick start (defaults to `PRIMARY_PROVIDER` from your env/config)
 
-```bash
-python main.py
-```
+ ```bash
+ python main.py
+ ```
 
-Follow the prompts from the `MLOrchestratorAgent`.
+ On first run, if `./my_data.csv` does not exist, the script will generate a small dummy file for you.
 
-## Usage Examples
+ ### 2) Override via CLI flags
 
-Interact with the orchestrator agent by providing high-level goals:
+ ```bash
+ # OpenAI with a specific model
+ python main.py \
+   --provider openai \
+   --api-key "$OPENAI_API_KEY" \
+   --openai-model "gpt-4"
 
-*   `"Load data from 'path/to/data.csv' and preprocess it."`
-*   `"Build a classification model using the preprocessed data 'dataset_id_1'."`
-*   `"Evaluate models 'model_id_A' and 'model_id_B' on dataset 'dataset_id_1'."`
-*   `"Generate a report summarizing the experiment."`
+ # Ollama on localhost with a named model
+ python main.py \
+   --provider ollama \
+   --ollama-api-base http://localhost:11434 \
+   --ollama-model "llama3.2:3b-instruct-q8_0"
+ ```
 
-*(Add more specific examples based on how users interact with `main.py`)*
+ ### 3) Or set everything via environment
 
-## Technologies
+ ```bash
+ export PRIMARY_PROVIDER=google
+ export GOOGLE_API_KEY="your-google-api-key"
+ export GOOGLE_DEFAULT_MODEL="models/text-bison-001"
+ export GOOGLE_IMAGE_ANALYSIS_MODEL="models/gemini-image-alpha-001"
+ python main.py
+ ```
 
-*   Python
-*   Google Agent Development Kit (ADK) - *Assumed*
-*   Pandas, Scikit-learn, Matplotlib, etc. (via Code Generation)
+ ## What to Expect
 
-## Contributing
+ - **Orchestrator Updates** prefixed with
 
-*(Optional: Add guidelines for contributing if this is an open project)*
+   ```
+   --- Orchestrator Update: <status message>
+   ```
 
-## License
+ - A **final report** printed when the workflow completes  
+ - A dump of the **session state** (all the tracked keys)  
+ - A list of **artifact keys** (plots, CSVs, models) at the end  
 
-*(Optional: Specify the license for your project, e.g., MIT, Apache 2.0)*
+ ## Example Prompt
+
+ > “Please analyze the dataset `./my_data.csv`. My goal is classification. Handle missing values using median imputation and apply standard scaling. Generate some preprocessing plots. Train both a Logistic Regression (C=0.5) and a RandomForestClassifier (n_estimators=50). Evaluate using accuracy and F1. Produce confusion matrix plots for each. Finally, give me a report summarizing everything.”
+
+ ## Next Steps
+
+ - Swap in a sandboxed code executor (Docker/Jail)  
+ - Hook up a real multimodal LLM for `ImageAnalysisAgent`  
+ - Add automated tests, linting, and CI for quality and safety  
+
+ ---
+
+ _With this in place, you can get the end‑to‑end agent “bot” up and running and start iterating on the code‑executor or model‑choices next._

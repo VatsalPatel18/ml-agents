@@ -140,15 +140,18 @@ image_analysis_agent._run_async_impl = image_analyzer_run_override.__get__(image
 
 
 # --- Wrap as AgentTool ---
-# Note: This instance is no longer created here, it's created in main.py
-# try:
-#     image_analysis_tool = agent_tool.AgentTool( # Use agent_tool.AgentTool
-#         agent=image_analysis_agent,
-#         description="Use this tool to analyze an image artifact (e.g., a saved plot) and answer a question about it. IMPORTANT: The calling agent MUST load the artifact's bytes, base64 encode them, and set 'temp:image_analysis_bytes_b64' in state BEFORE calling this tool. It MUST also set the 'temp:image_analysis_question' in state.",
-#     )
-# except Exception as e:
-#     print(f"ERROR: Failed to wrap ImageAnalysisAgent as AgentTool in module: {e}")
-#     image_analysis_tool = None
+try:
+    image_analysis_tool = agent_tool.AgentTool(
+        agent=image_analysis_agent,
+        description=(
+            "Use this tool to analyze an image file and answer a question about it. "
+            "The calling agent should set 'temp:image_analysis_bytes_b64' and 'temp:image_analysis_question' in session state before invocation."
+        )
+    )
+    print(f"--- ImageAnalysisAgent wrapped as tool: {image_analysis_tool.name} ---")
+except Exception as e:
+    print(f"ERROR: Could not create image_analysis_tool: {e}")
+    image_analysis_tool = None
 
 print(f"--- ImageAnalysisAgent Defined & Patched (Model: {image_analysis_agent.model}) ---")
 

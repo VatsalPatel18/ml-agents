@@ -134,17 +134,19 @@ You are the ML Copilot Orchestrator, an expert AI assistant managing a team of s
 - Use `logging_tool` extensively.
 """,
             description="The main ML Copilot orchestrator. Manages the ML workflow dynamically.",
-            # tools list passed to super()
-            # Callbacks assigned directly
+            tools=orchestrator_tools,  # Provide orchestrator tools
             before_agent_callback=log_before_agent,
             after_agent_callback=log_after_agent,
             before_tool_callback=log_before_tool,
             after_tool_callback=log_after_tool,
             **kwargs
         )
+        # Ensure tools and tools_map attributes are set for this orchestrator
+        self.tools = orchestrator_tools
+        self.tools_map = {t.name: t for t in orchestrator_tools}
         agent_flow_logger.info(f"{self.name} initialized.")
-        # Log tools assigned by super class if needed for debugging
-        agent_flow_logger.debug(f"{self.name} tools_map keys: {list(self.tools_map.keys())}")
+        # Debug: list the names of tools assigned to this orchestrator
+        agent_flow_logger.debug(f"{self.name} tools_map keys: {[t.name for t in orchestrator_tools]}")
 
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:

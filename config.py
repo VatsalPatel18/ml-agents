@@ -8,21 +8,30 @@ import datetime
 # NOTE: For OpenAI, ensure OPENAI_API_KEY env var is set.
 # NOTE: For Ollama, ensure Ollama service is running locally.
 PRIMARY_PROVIDER = os.getenv("PRIMARY_PROVIDER", "google") # Default to Google
+# Validate that required API credentials or endpoints are set for the chosen provider
+if PRIMARY_PROVIDER.lower() == "google":
+    if not os.getenv("GOOGLE_API_KEY"):  # noqa: WPS421
+        print("WARNING: PRIMARY_PROVIDER='google' but GOOGLE_API_KEY is not set. Google Gemini calls will fail without a valid API key.")
+elif PRIMARY_PROVIDER.lower() == "openai":
+    if not os.getenv("OPENAI_API_KEY"):  # noqa: WPS421
+        print("WARNING: PRIMARY_PROVIDER='openai' but OPENAI_API_KEY is not set. OpenAI calls will fail without a valid API key.")
+elif PRIMARY_PROVIDER.lower() == "ollama":
+    if not os.getenv("OLLAMA_API_BASE"):  # noqa: WPS421
+        print("WARNING: PRIMARY_PROVIDER='ollama' but OLLAMA_API_BASE is not set. Ollama API base URL is required for local Ollama usage.")
 
 # --- Google Models (Requires GOOGLE_API_KEY env var) ---
-# Ensure the Image Analysis model is multimodal (e.g., Gemini 1.5 Flash/Pro)
-GOOGLE_DEFAULT_MODEL = "gemini-1.5-flash-latest"
-GOOGLE_IMAGE_ANALYSIS_MODEL = "gemini-1.5-flash-latest" # Or gemini-1.5-pro-latest
+# Default model IDs can be overridden via environment variables:
+GOOGLE_DEFAULT_MODEL = os.getenv("GOOGLE_DEFAULT_MODEL", "gemini-1.5-flash-latest")
+GOOGLE_IMAGE_ANALYSIS_MODEL = os.getenv("GOOGLE_IMAGE_ANALYSIS_MODEL", "gemini-1.5-flash-latest")  # Or gemini-1.5-pro-latest
 
 # --- OpenAI Models (Requires OPENAI_API_KEY env var) ---
-# Requires 'pip install litellm'
-OPENAI_DEFAULT_MODEL = "openai/gpt-4o" # LiteLLM format
-OPENAI_IMAGE_ANALYSIS_MODEL = "openai/gpt-4-vision-preview" # Example, check LiteLLM/OpenAI docs for current vision models
+# Requires 'pip install litellm'. Can override by setting OPENAI_DEFAULT_MODEL env var.
+OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "openai/gpt-4o")  # LiteLLM format
+OPENAI_IMAGE_ANALYSIS_MODEL = os.getenv("OPENAI_IMAGE_ANALYSIS_MODEL", "openai/gpt-4-vision-preview")  # Example: check LiteLLM/OpenAI docs
 
 # --- Ollama Models (Requires Ollama running locally) ---
-# Requires 'pip install litellm'
-# Example: ollama pull llama3:8b
-OLLAMA_DEFAULT_MODEL = "ollama/llama3:8b" # LiteLLM format (replace with your desired Ollama model)
+# Requires 'pip install litellm'. Can override by setting OLLAMA_DEFAULT_MODEL env var.
+OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_DEFAULT_MODEL", "ollama/llama3:8b")  # LiteLLM format (replace with your own)
 # Ollama might not directly support robust multimodal analysis equivalent to Gemini/GPT-4V easily via LiteLLM yet.
 # We'll fallback to the primary provider's image model if Ollama is selected as primary.
 

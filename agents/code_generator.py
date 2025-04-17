@@ -42,17 +42,19 @@ You will receive detailed prompts specifying the task, context (like data paths,
 )
 
 # --- Wrap as AgentTool ---
-# This allows other agents to call the CodeGeneratorAgent easily
-# Note: This instance is no longer created here, it's created in main.py
-# We keep the agent definition here.
-# try:
-#     code_generator_tool = agent_tool.AgentTool( # Use agent_tool.AgentTool
-#         agent=code_generator_agent,
-#         description="Use this tool to generate Python code for specific ML tasks like data loading, preprocessing, training, evaluation, or plotting. Provide a detailed prompt describing the exact task, input/output paths/variables from state, libraries, and expected output format/convention (e.g., print 'SAVED_OUTPUT: name=path').",
-#     )
-# except Exception as e:
-#     print(f"ERROR: Failed to wrap CodeGeneratorAgent as AgentTool in module: {e}")
-#     code_generator_tool = None
+from google.adk.tools import agent_tool
+
+# --- Wrap as AgentTool ---
+# Provides other agents a function-like tool to invoke the CodeGeneratorAgent
+try:
+    code_generator_tool = agent_tool.AgentTool(
+        agent=code_generator_agent,
+        description="Use this tool to generate Python code for specific ML tasks (data loading, preprocessing, training, evaluation, plotting). Provide a detailed prompt describing the task, file paths, libraries, and expected output conventions (e.g., print 'SAVED_OUTPUT: name=path')."
+    )
+    print(f"--- CodeGeneratorAgent wrapped as tool: {code_generator_tool.name} ---")
+except Exception as e:
+    print(f"ERROR: Could not create code_generator_tool: {e}")
+    code_generator_tool = None
 
 print(f"--- CodeGeneratorAgent Defined (Model: {code_generator_agent.model}) ---")
 
